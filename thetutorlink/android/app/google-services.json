@@ -1,0 +1,68 @@
+{
+  "project_info": {
+    "project_number": "605909274631",
+    "project_id": "tutorlinkapp-a12c9",
+    "storage_bucket": "tutorlinkapp-a12c9.appspot.com"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:605909274631:android:20a032d1bbdd16c90cdaa2",
+        "android_client_info": {
+          "package_name": "com.example.thetutorlink"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "605909274631-qd4u3c9v83essc44hsv2gd0gr2hdh803.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAicfXf21xpjhsRuR0U1a8YNkmja_LxYr8"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "605909274631-qd4u3c9v83essc44hsv2gd0gr2hdh803.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:605909274631:android:c41347f9b8b2f78a0cdaa2",
+        "android_client_info": {
+          "package_name": "com.example.tutorlinkelearning"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "605909274631-qd4u3c9v83essc44hsv2gd0gr2hdh803.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAicfXf21xpjhsRuR0U1a8YNkmja_LxYr8"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "605909274631-qd4u3c9v83essc44hsv2gd0gr2hdh803.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
