@@ -1,173 +1,200 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_admin_scaffold/admin_scaffold.dart';
-import 'package:tladmin/Screens/HomeScreen/Books/addbooks.dart';
-import 'package:tladmin/Screens/HomeScreen/Course/addcourses.dart';
-import 'package:tladmin/Screens/HomeScreen/Course/allcourses.dart';
-import 'package:tladmin/Screens/HomeScreen/Tutors/acceptedtutors.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import 'package:tladmin/Screens/HomeScreen/dashboard.dart';
-import 'package:tladmin/Screens/HomeScreen/Tutors/alltutors.dart';
-import 'package:tladmin/Screens/HomeScreen/Tutors/tutorreviews.dart';
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:tladmin/constants.dart';
+import '../../providers/admin_data.dart';
+import '../../theme/app_tokens.dart';
+import '../../utils/responsive.dart';
+import '../helpscreen.dart';
+import '../policyscreen.dart';
+import 'Books/addbooks.dart';
+import 'Course/addcourses.dart';
+import 'Course/allcourses.dart';
+import 'Course/coursedetail.dart';
+import 'Requests/requests.dart';
+import 'Shell/admin_nav.dart';
+import 'Shell/admin_sidebar.dart';
+import 'Shell/admin_topbar.dart';
+import 'Tutors/acceptedtutors.dart';
+import 'Tutors/alltutors.dart';
+import 'Tutors/tutordetail.dart';
+import 'Tutors/tutorreviews.dart';
+import 'dashboard.dart';
 
-import '../SignIn/signinscreen.dart';
-
-class AdminPage extends StatefulWidget {
+/// The admin console shell: navigation rail, topbar and the page it hosts.
+///
+/// Navigation is state-driven (see [adminNavProvider]) rather than route-based,
+/// which is what lets a detail view swap the page body while the surrounding
+/// chrome stays put.
+class AdminPage extends ConsumerStatefulWidget {
   static String routeName = 'AdminPage';
 
+  const AdminPage({Key? key}) : super(key: key);
+
   @override
-  State<AdminPage> createState() => _AdminPageState();
+  ConsumerState<AdminPage> createState() => _AdminPageState();
 }
 
-class _AdminPageState extends State<AdminPage> {
-  final FirebaseAuth _auth = FirebaseAuth.instance;
-  Widget _selectedScreen = DashBoard();
+class _AdminPageState extends ConsumerState<AdminPage> {
+  final _searchController = TextEditingController();
+  final _scaffoldKey = GlobalKey<ScaffoldState>();
 
-//we set place place holders using the switch cases to get the bucket pages
-  currentScreen(item) {
-    switch (item.route) {
-      case 'DashBoard':
-        setState(() {
-          _selectedScreen = DashBoard();
-        });
-        break;
-      case 'AllTutorsScreen':
-        setState(() {
-          _selectedScreen = AllTutorsScreen();
-        });
-        break;
-      case 'AddCourse':
-        setState(() {
-          _selectedScreen = AddCourse();
-        });
-        break;
-      case 'AllCoursesScreen':
-        setState(() {
-          _selectedScreen = AllCoursesScreen();
-        });
-        break;
-      case 'TutorReviews':
-        setState(() {
-          _selectedScreen = TutorReviews();
-        });
-        break;
-      case 'AddAcceptedTutors':
-        setState(() {
-          _selectedScreen = AddAcceptedTutorScreen();
-        });
-        break;
-      case 'AddBooks':
-        setState(() {
-          _selectedScreen = AddBooksPage();
-        });
-        break;
+  String _query = '';
+  bool _notificationsOpen = false;
+  final Set<String> _readActivityIds = {};
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  Widget _pageFor(AdminPageKey key, String? detailId) {
+    switch (key) {
+      case AdminPageKey.dashboard:
+        return const DashboardBody();
+      case AdminPageKey.courses:
+        return const AllCoursesBody();
+      case AdminPageKey.courseDetail:
+        return CourseDetailBody(courseId: detailId!);
+      case AdminPageKey.addCourse:
+        return const AddCourseBody();
+      case AdminPageKey.tutors:
+        return const AllTutorsBody();
+      case AdminPageKey.tutorDetail:
+        return TutorDetailBody(tutorId: detailId!);
+      case AdminPageKey.addTutor:
+        return const AddTutorBody();
+      case AdminPageKey.reviews:
+        return const TutorReviewsBody();
+      case AdminPageKey.books:
+        return const BooksBody();
+      case AdminPageKey.requests:
+        return const RequestsBody();
+      case AdminPageKey.help:
+        return const HelpBody();
+      case AdminPageKey.policy:
+        return const PolicyBody();
     }
   }
-// Admin Scaffold widget from pub.dev with Ui fit for admin page
+
+  List<AdminSearchHit> _hits(AdminData data) {
+    final q = _query.trim().toLowerCase();
+    if (q.isEmpty) return const [];
+
+    final nav = ref.read(adminNavProvider.notifier);
+    void dismiss() {
+      _searchController.clear();
+      setState(() => _query = '');
+    }
+
+    return [
+      for (final c in data.courses
+          .where((c) => c.name.toLowerCase().contains(q))
+          .take(3))
+        AdminSearchHit(
+          kind: 'Course',
+          label: c.name,
+          kindColor: TLTokens.primary,
+          onSelect: () {
+            dismiss();
+            nav.openCourse(c.id);
+          },
+        ),
+      for (final t in data.tutors
+          .where((t) => t.name.toLowerCase().contains(q))
+          .take(3))
+        AdminSearchHit(
+          kind: 'Tutor',
+          label: t.name,
+          kindColor: TLTokens.secondary,
+          onSelect: () {
+            dismiss();
+            nav.openTutor(t.id);
+          },
+        ),
+      for (final b in data.bookFiles
+          .where((b) => b.name.toLowerCase().contains(q))
+          .take(2))
+        AdminSearchHit(
+          kind: 'Book',
+          label: b.name,
+          kindColor: TLTokens.success,
+          onSelect: () {
+            dismiss();
+            nav.go(AdminPageKey.books);
+          },
+        ),
+    ];
+  }
+
   @override
   Widget build(BuildContext context) {
-    return AdminScaffold(
-      backgroundColor: Colors.white,
-      appBar: AppBar(
-        title: const Text('TUTORLINK ADMINISTRATION'),
-        centerTitle: true,
-      ),
-      sideBar: SideBar(
-        items: const [
-          AdminMenuItem(
-            title: 'Dashboard',
-            route: 'DashBoard',
-            icon: Icons.dashboard,
-          ),
-          AdminMenuItem(
-            title: 'Courses',
-            icon: Icons.file_copy,
-            children: [
-              AdminMenuItem(
-                title: 'Add Course',
-                route: 'AddCourse',
-              ),
-              AdminMenuItem(
-                title: 'Course Status',
-                route: 'AllCoursesScreen',
-                // children: [],
-              ),
-            ],
-          ),
-          AdminMenuItem(
-            title: 'Tutor',
-            icon: Icons.file_copy,
-            children: [
-              AdminMenuItem(
-                title: 'Tutors',
-                route: 'AllTutorsScreen', 
-              ),
-              AdminMenuItem(
-                title: 'Accepted Tutors',
-                children: [
-                  AdminMenuItem(
-                    title: 'Add Tutors',
-                    route: 'AddAcceptedTutors',
-                  ),
-                  AdminMenuItem(
-                    title: 'Reviews',
-                    route: 'TutorReviews',
-                  ),
-                ],
-              ),
-            ],
-          ),
-          AdminMenuItem(
-              title: 'Books',
-              icon: Icons.library_books_rounded,
-              children: [AdminMenuItem(title: 'Add Books', route: 'AddBooks')])
-        ],
-        selectedRoute: 'AdminPage', 
-        onSelected: (item) {
-          currentScreen(item);
-        },
-        header: Container(
-          height: 50,
-          width: double.infinity,
-          color: kGreyColor900,
-          child: const Center(
-            child: Text(
-              'Admin Menu',
-              style: TextStyle(
-                color: Colors.white,
-              ),
-            ),
-          ),
+    final nav = ref.watch(adminNavProvider);
+    final data = ref.watch(adminDataProvider);
+    final activity = buildAdminActivity(data);
+    final hasUnread = activity.any((a) => !_readActivityIds.contains(a.id));
+    final wide = Responsive.isDesktop(context);
+
+    return Scaffold(
+      key: _scaffoldKey,
+      backgroundColor: context.tl.bg,
+      drawer: wide ? null : Drawer(
+        backgroundColor: context.tl.card,
+        width: 230,
+        child: AdminSidebar(
+          onNavigate: () => Navigator.of(context).pop(),
         ),
-        footer: GestureDetector(
-          onTap: () {
-            _auth.signOut();
-            Navigator.pushNamedAndRemoveUntil(
-                context, SignInScreen.routeName, (route) => false);
-          },
-          child: Container(
-            height: 50,
-            width: double.infinity,
-            color: kRedColor,
-            child: const Center(
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.logout_outlined),
-                  Text(
-                    'Logout',
-                    style: TextStyle(
-                      color: Colors.white,
+      ),
+      body: Row(
+        children: [
+          if (wide) const AdminSidebar(),
+          Expanded(
+            child: Stack(
+              children: [
+                Column(
+                  children: [
+                    AdminTopbar(
+                      searchController: _searchController,
+                      onSearchChanged: (v) => setState(() => _query = v),
+                      hasUnread: hasUnread,
+                      onToggleNotifications: () => setState(() {
+                        _notificationsOpen = !_notificationsOpen;
+                      }),
+                      onOpenMenu: wide
+                          ? null
+                          : () => _scaffoldKey.currentState?.openDrawer(),
+                    ),
+                    Expanded(
+                      child: SingleChildScrollView(
+                        padding: const EdgeInsets.fromLTRB(28, 26, 28, 40),
+                        child: _pageFor(nav.page, nav.detailId),
+                      ),
+                    ),
+                  ],
+                ),
+                if (_query.trim().isNotEmpty)
+                  Positioned(
+                    top: 70,
+                    left: 22,
+                    child: AdminSearchDropdown(hits: _hits(data)),
+                  ),
+                if (_notificationsOpen)
+                  Positioned(
+                    top: 64,
+                    right: 20,
+                    child: AdminActivityDropdown(
+                      items: activity,
+                      readIds: _readActivityIds,
+                      onMarkAllRead: () => setState(() {
+                        _readActivityIds.addAll(activity.map((a) => a.id));
+                      }),
                     ),
                   ),
-                ],
-              ),
+              ],
             ),
           ),
-        ),
+        ],
       ),
-      body: SingleChildScrollView(child: _selectedScreen),
     );
   }
 }

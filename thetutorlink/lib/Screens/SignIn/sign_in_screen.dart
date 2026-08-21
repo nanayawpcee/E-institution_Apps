@@ -1,381 +1,214 @@
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:thetutorlink/Api/signinauth.dart';
-import 'package:thetutorlink/Screens/Profile/models/dialog.dart';
-import 'package:thetutorlink/components/textform.dart';
-import 'package:thetutorlink/constants.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_svg/flutter_svg.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-class SignInScreen extends StatefulWidget {
+import '../../Components/home.dart';
+import '../../services/local_auth_service.dart';
+import '../../theme/app_text.dart';
+import '../../theme/app_tokens.dart';
+import '../../theme/app_widgets.dart';
+import '../Profile/models/dialog.dart';
+
+/// Sign in. Tutors are onboarded by an administrator, so there is no sign-up
+/// path here — just credentials, a reset sheet and a route to support.
+class SignInScreen extends ConsumerStatefulWidget {
   static String routeName = 'SignInScreen';
+
+  const SignInScreen({Key? key}) : super(key: key);
+
   @override
-  State<SignInScreen> createState() => _SignInScreenState();
+  ConsumerState<SignInScreen> createState() => _SignInScreenState();
 }
 
-class _SignInScreenState extends State<SignInScreen> {
-  final _signinformkey = GlobalKey<FormState>();
-  final _passwordResetFormKey = GlobalKey<FormState>();
+class _SignInScreenState extends ConsumerState<SignInScreen> {
+  static final emailRe = RegExp(r'^[\w.-]+@([\w-]+\.)+[\w]{2,4}$');
 
-  final FirebaseAuth _auth = FirebaseAuth.instance;
+  final _emailController = TextEditingController();
+  final _passwordController = TextEditingController();
 
-  final TextEditingController _emailController =
-      TextEditingController(text: '');
-  final TextEditingController _passwordController =
-      TextEditingController(text: '');
+  bool _showPassword = false;
+  bool _busy = false;
+  final Map<String, String> _errors = {};
 
-  late bool _passwordVisible;
   @override
-  void initState() {
-    super.initState();
-    _passwordVisible = false;
+  void dispose() {
+    _emailController.dispose();
+    _passwordController.dispose();
+    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      //This is to say the user  taps anywhere on the
-      //screen, the keyboard should hide
-      onTap: () => FocusManager.instance.primaryFocus?.unfocus(),
-      child: Scaffold(
-        body: SafeArea(
-          child: SingleChildScrollView(
-            child: Padding(
-              padding: const EdgeInsets.all(8.0),
-              child: Form(
-                key: _signinformkey,
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Container(
-                      height: 60,
-                    ),
-                    // The header of the sign In page
-                    // this comes first in this scaffold
-                    const Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Text(
-                          "Welcome back",
-                          style: TextStyle(
-                            color: kBlueColor,
-                            fontSize: 20,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        )
-                      ],
-                    ),
-                    const SizedBox(
-                      height: 8,
-                    ),
-                    const Text(
-                      "Login to continue",
-                      style: TextStyle(
-                          color: kBlueColor,
-                          fontSize: 18,
-                          fontWeight: FontWeight.w400),
-                    ),
-                    const SizedBox(
-                      height: 20,
-                    ),
-                    Textform(
-                      boxname: "Email Address",
-                      controller: _emailController,
-                      preIcon: Icon(Icons.email_outlined),
-                      keyboardtype: TextInputType.emailAddress,
-                      validator: (value) {
-                        if (value!.isEmpty ||
-                            !RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w]{2,4}$')
-                                .hasMatch(value!)) {
-                          return 'Please enter a valid Email';
-                        }
-                        return null;
-                      },
-                    ),
-                    PasswordForm(
-                        boxname: "Enter Password",
-                        controller: _passwordController,
-                        preIcon: const Icon(Icons.lock_sharp),
-                        keyboardtype: TextInputType.visiblePassword,
-                        visiblePassword: _passwordVisible,
-                        validator: (value) {
-                          if (value!.isEmpty) {
-                            return 'Please enter your password';
-                          } else if (!RegExp(
-                                  r'^(?=.*?[A-Z])(?=.*?[a-z])(?=.*?[0-9])(?=.*?[!@#\$&*;~%]).{8,}$')
-                              .hasMatch(value!)) {
-                            return 'Password should contain at least:\n'
-                                '- 1 uppercase letter,\n'
-                                '- 1 lowercase letter,\n'
-                                '- 1 special character,\n'
-                                '- Minimum length of 8 characters';
-                          }
-                          return null;
-                        }),
-                    const SizedBox(
-                      height: 16,
-                    ),
-                    //This widget contains a pop-up dialog to enable the user to reset password
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.end,
-                      children: [
-                        GestureDetector(
-                          onTap: () {
-                            showDialog(
-                                barrierDismissible: false,
-                                context: context,
-                                builder: (context) {
-                                  return Dialog(
-                                    shape: const RoundedRectangleBorder(
-                                        borderRadius: BorderRadius.vertical(
-                                            top: Radius.circular(14))),
-                                    child: SizedBox(
-                                        height: 400,
-                                        //width: 600,
-
-                                        child: Form(
-                                          key: _passwordResetFormKey,
-                                          child: Padding(
-                                            padding: const EdgeInsets.all(8.0),
-                                            child: Column(
-                                              mainAxisAlignment:
-                                                  MainAxisAlignment.start,
-                                              crossAxisAlignment:
-                                                  CrossAxisAlignment.center,
-                                              children: [
-                                                Row(
-                                                  mainAxisAlignment:
-                                                      MainAxisAlignment.end,
-                                                  children: [
-                                                    //this is to go back the dialog box or cancel
-                                                    //password reset
-                                                    GestureDetector(
-                                                      onTap: () {
-                                                        Navigator.pop(context);
-                                                      },
-                                                      child: SvgPicture.asset(
-                                                        'assets/icons/close.svg',
-                                                        height: 40,
-                                                        width: 40,
-                                                      ),
-                                                    ),
-                                                  ],
-                                                ),
-                                                const Text(
-                                                  "Forgot your Password?",
-                                                  style: TextStyle(
-                                                      fontSize: 22,
-                                                      fontWeight:
-                                                          FontWeight.w600),
-                                                ),
-                                                const Padding(
-                                                  padding: EdgeInsets.all(4.0),
-                                                  child: Text(
-                                                    "Enter your email address and we will share a link to create a new password.",
-                                                    style: TextStyle(
-                                                        fontSize: 15,
-                                                        fontWeight:
-                                                            FontWeight.normal),
-                                                    textAlign: TextAlign.center,
-                                                  ),
-                                                ),
-                                                Textform(
-                                                  boxname: '',
-                                                  preIcon: Icon(
-                                                      Icons.email_outlined),
-                                                  keyboardtype: TextInputType
-                                                      .emailAddress,
-                                                  controller: _emailController,
-                                                  validator: (value) {
-                                                    if (value!.isEmpty ||
-                                                        !RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w]{2,4}$')
-                                                            .hasMatch(value!)) {
-                                                      return 'Please enter a valid Email';
-                                                    }
-                                                    return null;
-                                                  },
-                                                ),
-                                                InkWell(
-                                                  child: GestureDetector(
-                                                    onTap: () async {
-                                                      if (_passwordResetFormKey
-                                                          .currentState!
-                                                          .validate()) {
-                                                        try {
-                                                          await _auth
-                                                              .sendPasswordResetEmail(
-                                                                  email:
-                                                                      _emailController
-                                                                          .text);
-                                                          Navigator.pop(
-                                                              context); // Close the dialog
-                                                          _showSuccessDialog(
-                                                              context,
-                                                              'Password reset email sent.');
-                                                        } catch (e) {
-                                                          _showErrorDialog(
-                                                              context,
-                                                              e.toString());
-                                                        }
-                                                      }
-                                                    },
-                                                    child: Padding(
-                                                      padding:
-                                                          const EdgeInsets.all(
-                                                              8),
-                                                      child: Container(
-                                                        width: MediaQuery.of(
-                                                                context)
-                                                            .size
-                                                            .width,
-                                                        height: 60,
-                                                        decoration:
-                                                            BoxDecoration(
-                                                          borderRadius:
-                                                              BorderRadius
-                                                                  .circular(8),
-                                                          color: kBlueColor,
-                                                        ),
-                                                        child: Center(
-                                                            child: Row(
-                                                          mainAxisAlignment:
-                                                              MainAxisAlignment
-                                                                  .center,
-                                                          children: [
-                                                            SvgPicture.asset(
-                                                                'assets/icons/send.svg'),
-                                                            const SizedBox(
-                                                              width: 10,
-                                                            ),
-                                                            Text(
-                                                              "Send",
-                                                              style: TextStyle(
-                                                                  color: Theme.of(
-                                                                          context)
-                                                                      .copyWith()
-                                                                      .scaffoldBackgroundColor,
-                                                                  fontSize: 20,
-                                                                  fontWeight:
-                                                                      FontWeight
-                                                                          .bold),
-                                                            ),
-                                                          ],
-                                                        )),
-                                                      ),
-                                                    ),
-                                                  ),
-                                                ),
-                                              ],
-                                            ),
-                                          ),
-                                        )),
-                                  );
-                                });
-                          },
-                          child: const Text(
-                            "Forgot Password? ",
-                            style: TextStyle(
-                                color: kBlueColor,
-                                fontSize: 16,
-                                fontWeight: FontWeight.w700),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(
-                      height: 14,
-                    ),
-                    InkWell(
-                      child: signinauth(
-                          onError: (error) {
-                            _showErrorDialog(context, error);
-                          },
-                          signinformkey: _signinformkey,
-                          auth: _auth,
-                          emailController: _emailController,
-                          passwordController: _passwordController),
-                    ),
-                    const SizedBox(
-                      height: 25,
-                    ),
-                    //beneath the log in bottom
-                    // this widget contains the signup option and route
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        const Text(
-                          "Having problems as tutor?",
-                          style: TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                        const SizedBox(
-                          width: 4,
-                        ),
-                        GestureDetector(
-                          onTap: () {
-                            HelpCenterDialog(context);
-                          },
-                          child: const Text(
-                            "contact us",
-                            style: TextStyle(
-                                color: kBlueColor,
-                                fontSize: 18,
-                                fontWeight: FontWeight.bold),
-                          ),
-                        )
-                      ],
-                    )
-                  ],
+    final t = context.tl;
+    return Scaffold(
+      backgroundColor: t.bg,
+      body: GestureDetector(
+        onTap: () => FocusManager.instance.primaryFocus?.unfocus(),
+        child: SafeArea(
+          child: ListView(
+            padding: const EdgeInsets.fromLTRB(24, 40, 24, 32),
+            children: [
+              Text('Welcome back', style: TLText.authTitle(TLTokens.primary)),
+              const SizedBox(height: 4),
+              Text(
+                'Sign in to your tutor account',
+                style: TLText.body(t.textSub),
+              ),
+              const SizedBox(height: 24),
+              TLField(
+                hint: 'Email address',
+                controller: _emailController,
+                keyboardType: TextInputType.emailAddress,
+                errorText: _errors['email'],
+              ),
+              const SizedBox(height: 14),
+              TLField(
+                hint: 'Password',
+                controller: _passwordController,
+                obscureText: !_showPassword,
+                errorText: _errors['password'],
+                suffix: TLRevealToggle(
+                  revealed: _showPassword,
+                  onPressed: () =>
+                      setState(() => _showPassword = !_showPassword),
                 ),
               ),
-            ),
+              const SizedBox(height: 6),
+              Align(
+                alignment: Alignment.centerRight,
+                child: TextButton(
+                  onPressed: () => showTLSheet<void>(
+                    context: context,
+                    builder: (context) => const ForgotPasswordSheet(),
+                  ),
+                  child: const Text('Forgot password?'),
+                ),
+              ),
+              const SizedBox(height: 8),
+              TLButton(
+                label: 'Sign in',
+                busy: _busy,
+                onPressed: _busy ? null : _submit,
+              ),
+              const SizedBox(height: 18),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text('Need an account?', style: TLText.sub(t.textSub)),
+                  const SizedBox(width: 6),
+                  InkWell(
+                    onTap: () => helpCenterDialog(context),
+                    child: Text(
+                      'Contact support',
+                      style: TLText.link(TLTokens.primary),
+                    ),
+                  ),
+                ],
+              ),
+            ],
           ),
         ),
       ),
     );
   }
+
+  Future<void> _submit() async {
+    final email = _emailController.text.trim().toLowerCase();
+    final password = _passwordController.text.trim();
+
+    final errors = <String, String>{};
+    if (!emailRe.hasMatch(email)) errors['email'] = 'Please enter a valid email';
+    if (password.isEmpty) errors['password'] = 'Please enter your password';
+
+    setState(() {
+      _errors
+        ..clear()
+        ..addAll(errors);
+    });
+    if (errors.isNotEmpty) return;
+
+    setState(() => _busy = true);
+    try {
+      final tutor =
+          await ref.read(authProvider.notifier).signIn(email, password);
+      if (!mounted) return;
+      if (tutor == null) {
+        setState(() => _errors['password'] = 'Invalid email or password');
+        return;
+      }
+      Navigator.pushNamedAndRemoveUntil(
+          context, HomeScreensBuilder.routeName, (route) => false);
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
 }
 
-void _showSuccessDialog(context, String message) {
-  showDialog(
-    context: context,
-    builder: (context) {
-      return AlertDialog(
-        title: const Text('Success'),
-        content: Text(message),
-        actions: [
-          TextButton(
-            onPressed: () {
-              Navigator.pop(context);
-            },
-            child: const Text('OK'),
-          ),
-        ],
-      );
-    },
-  );
+/// Reset-link sheet raised from "Forgot password?".
+class ForgotPasswordSheet extends StatefulWidget {
+  const ForgotPasswordSheet({Key? key}) : super(key: key);
+
+  @override
+  State<ForgotPasswordSheet> createState() => _ForgotPasswordSheetState();
 }
 
-// This fuction is to show a dialog box containing error
-//when connecting with the backend
+class _ForgotPasswordSheetState extends State<ForgotPasswordSheet> {
+  final _controller = TextEditingController();
+  String? _error;
+  bool _sent = false;
 
-void _showErrorDialog(context, String errorMessage) {
-  showDialog(
-    context: context,
-    builder: (context) {
-      return AlertDialog(
-        title: const Text('Error'),
-        content: Text(errorMessage),
-        actions: [
-          TextButton(
-            onPressed: () {
-              Navigator.pop(context);
-            },
-            child: const Text('OK'),
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final t = context.tl;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text('Reset your password', style: TLText.cardTitle(t.text)),
+        const SizedBox(height: 6),
+        Text(
+          'Enter your email to receive a reset link.',
+          style: TLText.sub(t.textSub),
+        ),
+        if (_sent)
+          Padding(
+            padding: const EdgeInsets.only(top: 16),
+            child: Text(
+              'Reset email sent.',
+              style: TLText.link(TLTokens.success),
+            ),
+          )
+        else ...[
+          const SizedBox(height: 14),
+          TLField(
+            hint: 'Email address',
+            controller: _controller,
+            keyboardType: TextInputType.emailAddress,
+            errorText: _error,
           ),
+          const SizedBox(height: 16),
+          TLButton(label: 'Send link', onPressed: _send),
         ],
-      );
-    },
-  );
+      ],
+    );
+  }
+
+  void _send() {
+    if (!_SignInScreenState.emailRe.hasMatch(_controller.text.trim())) {
+      setState(() => _error = 'Please enter a valid email');
+      return;
+    }
+    setState(() {
+      _error = null;
+      _sent = true;
+    });
+    Future.delayed(const Duration(milliseconds: 1600), () {
+      if (mounted) Navigator.pop(context);
+    });
+  }
 }

@@ -1,143 +1,131 @@
 import 'package:flutter/material.dart';
-import 'package:firebase_database/firebase_database.dart';
-import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
-import 'package:tutorlinkelearning/constants.dart';
 
-class InteractionPage extends StatefulWidget {
+import '../../providers/student_data.dart';
+import '../../services/chat_read_state.dart';
+import '../../services/local_auth_service.dart';
+import '../../theme/app_text.dart';
+import '../../theme/app_tokens.dart';
+import '../../theme/app_widgets.dart';
+
+/// One conversation with a tutor. Outgoing messages sit right in the accent,
+/// incoming ones left on the recessed surface.
+class InteractionPage extends ConsumerStatefulWidget {
+  const InteractionPage({
+    Key? key,
+    required this.name,
+    required this.tutorId,
+    required this.studentId,
+  }) : super(key: key);
+
   final String name;
   final String tutorId;
   final String studentId;
 
-  const InteractionPage({
-    required this.name,
-    required this.tutorId,
-    required this.studentId,
-  });
-
   @override
-  _InteractionPageState createState() => _InteractionPageState();
+  ConsumerState<InteractionPage> createState() => _InteractionPageState();
 }
 
-class _InteractionPageState extends State<InteractionPage> {
-  final TextEditingController _messageController = TextEditingController();
-  final currentUser = FirebaseAuth.instance.currentUser;
+class _InteractionPageState extends ConsumerState<InteractionPage> {
+  final _messageController = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    // Opening the thread is what clears its unread badge.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      ref.read(chatReadProvider.notifier).markRead(
+            StudentAppDataNotifier.chatKey(widget.tutorId, widget.studentId),
+          );
+    });
+  }
+
+  @override
+  void dispose() {
+    _messageController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
+    final t = context.tl;
+    final chatKey =
+        StudentAppDataNotifier.chatKey(widget.tutorId, widget.studentId);
+    final messages = [...?ref.watch(studentDataProvider).chats[chatKey]]
+      ..sort((a, b) => b.time.compareTo(a.time));
+
     return Scaffold(
-      appBar: AppBar(
-        title: Text(widget.name),
-        centerTitle: true,
-      ),
+      backgroundColor: t.bg,
+      appBar: AppBar(title: Text(widget.name)),
       body: Column(
         children: [
           Expanded(
-            child: StreamBuilder(
-              stream: FirebaseDatabase.instance
-                  .ref()
-                  .child('chats')
-                  .child(widget.tutorId)
-                  .child(widget.studentId)
-                  .onValue,
-              builder: (context, snapshot) {
-                if (snapshot.hasData) {
-                  final chatData = snapshot.data!.snapshot.value;
-                  if (chatData != null) {
-                    final messages =
-                        chatData is Map ? chatData.values.toList() : [];
-                    messages.sort((a, b) => b['time']
-                        .compareTo(a['time'])); // Sort in descending order
-
-                    return ListView.builder(
-                      reverse: true, // Reverse the list view
-                      itemCount: messages.length,
-                      itemBuilder: (context, index) {
-                        final message = messages[index]['message'];
-                        final timeMillis = messages[index]['time'];
-                        final senderId = messages[index]['sender'];
-                        final isTutorMessage = senderId == widget.tutorId;
-                        final time =
-                            DateTime.fromMillisecondsSinceEpoch(timeMillis);
-                        final formattedTime =
-                            DateFormat('EEE, MMM d, y, HH:mm').format(time);
-
-                        return Row(
-                          mainAxisAlignment: isTutorMessage//to ensure proper alignment and to distinguisg between the tutor message or the otherwise
-                              ? MainAxisAlignment.start
-                              : MainAxisAlignment.end,
-                          children: [
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 12, vertical: 8),
-                              margin: const EdgeInsets.symmetric(
-                                  horizontal: 12, vertical: 8),
-                              constraints: BoxConstraints(
-                                maxWidth:
-                                    MediaQuery.of(context).size.width / 2.3,
-                              ),
-                              decoration: BoxDecoration(
-                                color:
-                                    isTutorMessage ? kGreyColor900 : kBlueColor,
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              child: Column(
-                                crossAxisAlignment: isTutorMessage// this is to align messages from bottom to app to allow easy readabilty
-                                    ? CrossAxisAlignment.start
-                                    : CrossAxisAlignment.end,
-                                children: [
-                                  Text(
-                                    message,//display the message
-                                    style: const TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 16,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 4),
-                                  Text(
-                                    formattedTime,// this shows the formatted time under the message body for every message sent
-                                    style: const TextStyle(
-                                      color: Colors.white70,
-                                      fontSize: 12,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ],
-                        );
-                      },
-                    );
-                  } else {
-                    // Show a loading indicator or empty message in our case we prefer a text
-                    return const Center(child: Text('Wait! Getting Messages'));
-                  }
-                } else {
-                  // Show a loading indicator or empty message in our case we prefer a Text
-                  return const  Center(child: Text('Wait! Getting Messages'));
-                }
-              },
-            ),
+            child: messages.isEmpty
+                ? const TLEmptyState(
+                    icon: Icons.forum_outlined,
+                    title: 'No messages yet',
+                    message: 'Say hello to get the conversation started.',
+                  )
+                : ListView.builder(
+                    reverse: true,
+                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+                    itemCount: messages.length,
+                    itemBuilder: (context, i) {
+                      final entry = messages[i];
+                      return _Bubble(
+                        message: entry.message,
+                        time: entry.time,
+                        mine: entry.senderId == widget.studentId,
+                      );
+                    },
+                  ),
           ),
-          Padding(
-            padding: const EdgeInsets.all(8.0),
-            child: Row(
-              children: [
-                Expanded(
-                  child: TextFormField(
-                    controller: _messageController,
-                    decoration: const InputDecoration(
-                      hintText: 'Type your message...',
+          SafeArea(
+            top: false,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: SizedBox(
+                      height: 46,
+                      child: TextField(
+                        controller: _messageController,
+                        textInputAction: TextInputAction.send,
+                        onSubmitted: (_) => _send(),
+                        style: TLText.sub(t.text),
+                        decoration: InputDecoration(
+                          hintText: 'Type your message...',
+                          contentPadding:
+                              const EdgeInsets.symmetric(horizontal: 18),
+                          border: _pill(t.border),
+                          enabledBorder: _pill(t.border),
+                          focusedBorder: _pill(TLTokens.primary),
+                        ),
+                      ),
                     ),
                   ),
-                ),
-                IconButton(
-                  onPressed: () {
-                    _sendMessage();
-                  },
-                  icon: const Icon(Icons.send),
-                ),
-              ],
+                  const SizedBox(width: 10),
+                  Material(
+                    color: TLTokens.primary,
+                    shape: const CircleBorder(),
+                    child: InkWell(
+                      onTap: _send,
+                      customBorder: const CircleBorder(),
+                      child: const SizedBox(
+                        width: 46,
+                        height: 46,
+                        child: Icon(
+                          Icons.send_rounded,
+                          size: 20,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         ],
@@ -145,28 +133,74 @@ class _InteractionPageState extends State<InteractionPage> {
     );
   }
 
-  void _sendMessage() {
+  OutlineInputBorder _pill(Color c) => OutlineInputBorder(
+        borderRadius: BorderRadius.circular(23),
+        borderSide: BorderSide(color: c, width: 1.5),
+      );
+
+  void _send() {
     final message = _messageController.text.trim();
-    if (message.isNotEmpty && currentUser != null) {
-      final senderId = currentUser!.uid;
-      final timestamp = DateTime.now()
-          .millisecondsSinceEpoch; // Convert Timestamp to milliseconds
-      FirebaseDatabase.instance
-          .ref()
-          .child('chats')
-          .child(widget.tutorId)
-          .child(widget.studentId)
-          .push()
-          .set({
-        'message': message,
-        'time': timestamp, // Store timestamp as milliseconds
-        'sender': senderId,
-      }).then((_) {
-        _messageController.clear();
-      }).catchError((error) {
-        //we are checking for errors in the console will work on this later
-        print('Error sending message: $error');
-      });
-    }
+    final senderId = ref.read(authProvider)?.id;
+    if (message.isEmpty || senderId == null) return;
+
+    ref.read(studentDataProvider.notifier).sendChatMessage(
+          widget.tutorId,
+          widget.studentId,
+          senderId,
+          message,
+        );
+    _messageController.clear();
+  }
+}
+
+class _Bubble extends StatelessWidget {
+  const _Bubble({
+    required this.message,
+    required this.time,
+    required this.mine,
+  });
+
+  final String message;
+  final DateTime time;
+  final bool mine;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = context.tl;
+    final textColor = mine ? Colors.white : t.text;
+
+    return Align(
+      alignment: mine ? Alignment.centerRight : Alignment.centerLeft,
+      child: Container(
+        margin: const EdgeInsets.symmetric(vertical: 4),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        constraints: BoxConstraints(
+          maxWidth: MediaQuery.of(context).size.width * 0.72,
+        ),
+        decoration: BoxDecoration(
+          color: mine ? TLTokens.primary : t.cardAlt,
+          borderRadius: BorderRadius.only(
+            topLeft: const Radius.circular(16),
+            topRight: const Radius.circular(16),
+            bottomLeft: Radius.circular(mine ? 16 : 4),
+            bottomRight: Radius.circular(mine ? 4 : 16),
+          ),
+        ),
+        child: Column(
+          crossAxisAlignment:
+              mine ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+          children: [
+            Text(message, style: TLText.sub(textColor).copyWith(height: 1.4)),
+            const SizedBox(height: 3),
+            Text(
+              DateFormat('EEE, h:mm a').format(time),
+              style: TLText.tag(
+                mine ? Colors.white70 : t.textSub,
+              ).copyWith(fontWeight: FontWeight.w400),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }

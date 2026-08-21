@@ -1,110 +1,88 @@
 import 'package:flutter/material.dart';
-import 'package:thetutorlink/Screens/ClassRoom/assignment.dart';
-import 'package:thetutorlink/Screens/ClassRoom/resourceroom.dart';
-import 'package:thetutorlink/Screens/ClassRoom/settingspage.dart';
-import 'package:thetutorlink/constants.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-class CourseMaterialPage extends StatefulWidget {
+import '../../providers/tutor_data.dart';
+import '../../theme/app_tokens.dart';
+import '../../theme/app_widgets.dart';
+import 'assignment.dart';
+import 'resourceroom.dart';
+import 'settingspage.dart';
+
+enum _ClassroomTab { resources, assignments, settings }
+
+/// The classroom the tutor runs with one student: shared resources, submitted
+/// assignments and class settings, switched by the design's chip tabs.
+class CourseMaterialPage extends ConsumerStatefulWidget {
+  const CourseMaterialPage({
+    Key? key,
+    required this.studentId,
+    required this.tutorId,
+  }) : super(key: key);
+
   final String studentId;
   final String tutorId;
 
-  const CourseMaterialPage({required this.studentId, required this.tutorId});
   @override
-  _CourseMaterialPageState createState() => _CourseMaterialPageState();
+  ConsumerState<CourseMaterialPage> createState() =>
+      _CourseMaterialPageState();
 }
 
-class _CourseMaterialPageState extends State<CourseMaterialPage> {
-  final PageController _pageController = PageController();
-  List<Widget> _pages = [];
-
-  int _currentPageIndex = 0;
-
-
-
-  void _onMenuItemTap(int index) {
-    setState(() {
-      _currentPageIndex = index;
-      _pageController.jumpToPage(index);
-    });
-    Navigator.pop(context);
-  }
-
-  @override
-  void initState() {
-    super.initState();
-    _pages = [
-      ResourcePage(
-        studentId: widget.studentId,
-      ),
-      AssignmentsPage(studentId: widget.studentId),
-      SettingsPage(),
-    ];
-  }
+class _CourseMaterialPageState extends ConsumerState<CourseMaterialPage> {
+  _ClassroomTab _tab = _ClassroomTab.resources;
 
   @override
   Widget build(BuildContext context) {
+    final t = context.tl;
+    final student =
+        ref.watch(tutorDataProvider.notifier).studentById(widget.studentId);
+
     return Scaffold(
-      body: PageView(
-        controller: _pageController,
-        children: _pages,
-        onPageChanged: (index) {
-          setState(() {
-            _currentPageIndex = index;
-          });
-        },
-      ),
-      drawer: Drawer(
-        backgroundColor: kBlueColor,
-        child: ListView(
-          padding: EdgeInsets.zero,
-          children: <Widget>[
-            const DrawerHeader(
-              child: Text(
-                'Classroom',
-                style: TextStyle(fontSize: 30, color: kYellowColor),
-              ),
-              decoration: BoxDecoration(
-                color: kGreyColor800,
-                image: DecorationImage(
-                    fit: BoxFit.fill,
-                    image: AssetImage('assets/images/class.png')),
-              ),
+      backgroundColor: t.bg,
+      appBar: AppBar(title: Text(student?.name ?? 'Classroom')),
+      body: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 4, 20, 16),
+            child: TLChipBar(
+              children: [
+                for (final tab in _ClassroomTab.values)
+                  TLChip(
+                    label: _label(tab),
+                    selected: _tab == tab,
+                    onTap: () => setState(() => _tab = tab),
+                  ),
+              ],
             ),
-            ListTile(
-              leading: const Icon(
-                Icons.book,
-                color: kGreyColor500,
-              ),
-              title: const Text('Resources',
-                  style: TextStyle(color: kWhiteColor, fontSize: 18)),
-              selected: _currentPageIndex == 0,
-              onTap: () => _onMenuItemTap(0),
-            ),
-            ListTile(
-              leading: const Icon(
-                Icons.assignment_add,
-                color: kGreyColor500,
-              ),
-              title: const Text(
-                'Assignments',
-                style: TextStyle(color: kWhiteColor, fontSize: 18),
-              ),
-              selected: _currentPageIndex == 1,
-              onTap: () => _onMenuItemTap(1),
-            ),
-            ListTile(
-              leading: const Icon(
-                Icons.settings,
-                color: kGreyColor500,
-              ),
-              title: const Text('Settings Page',
-                  style: TextStyle(color: kWhiteColor, fontSize: 18)),
-              selected: _currentPageIndex == 2,
-              onTap: () => _onMenuItemTap(2),
-            ),
-          ],
-        ),
+          ),
+          Expanded(child: _body()),
+        ],
       ),
     );
+  }
+
+  Widget _body() {
+    switch (_tab) {
+      case _ClassroomTab.resources:
+        return ResourcePage(studentId: widget.studentId);
+      case _ClassroomTab.assignments:
+        return AssignmentsPage(studentId: widget.studentId);
+      case _ClassroomTab.settings:
+        return SettingsPage(
+          studentId: widget.studentId,
+          tutorId: widget.tutorId,
+        );
+    }
+  }
+
+  String _label(_ClassroomTab tab) {
+    switch (tab) {
+      case _ClassroomTab.resources:
+        return 'Resources';
+      case _ClassroomTab.assignments:
+        return 'Assignments';
+      case _ClassroomTab.settings:
+        return 'Settings';
+    }
   }
 }

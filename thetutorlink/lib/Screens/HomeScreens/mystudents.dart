@@ -1,155 +1,125 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../Api/firebase_functions.dart';
+import '../../Components/home.dart';
 import '../../Components/studentscard.dart';
-import '../../constants.dart';
+import '../../models/app_models.dart';
+import '../../providers/tutor_data.dart';
+import '../../services/local_auth_service.dart';
+import '../../theme/app_text.dart';
+import '../../theme/app_tokens.dart';
+import '../../theme/app_widgets.dart';
 
-class Mystudents extends StatefulWidget {
+/// Students tab: everyone the tutor teaches, searchable and filterable by
+/// course.
+class MyStudents extends ConsumerStatefulWidget {
+  const MyStudents({Key? key}) : super(key: key);
+
   @override
-  State<Mystudents> createState() => _MystudentsState();
+  ConsumerState<MyStudents> createState() => _MyStudentsState();
 }
 
-class _MystudentsState extends State<Mystudents> {
-  final TextEditingController _searchController = TextEditingController();
-  final FirebaseFunctions _firebaseFunctions = FirebaseFunctions();
-  String? userImage;
-  List<Map<String, dynamic>> students = [];
-  List<Map<String, dynamic>> filteredStudents = [];
-
-  @override
-  void initState() {
-    super.initState();
-    _loadData();
-    _searchController.addListener(_onSearchChanged);
-  }
-
-  void _onSearchChanged() {
-    final searchText = _searchController.text.toLowerCase();
-    setState(() {
-      filteredStudents = students.where((student) {
-        final studentName = (student['name'] ?? '').toLowerCase();
-        return studentName.contains(searchText);
-      }).toList();
-    });
-  }
-
-  Future<void> _loadData() async {
-    final tutorData = await FirebaseFirestore.instance
-        .collection('Tutors')
-        .doc(FirebaseAuth.instance.currentUser!.uid)
-        .get();
-    final studentIds = List<String>.from(tutorData['students'] ?? []);
-    final studentDetails =
-        await _firebaseFunctions.getStudentDetails(studentIds);
-
-    setState(() {
-      students = studentDetails;
-      filteredStudents = studentDetails;
-    });
-  }
-
-  @override
-  void dispose() {
-    _searchController.dispose();
-    super.dispose();
-  }
+class _MyStudentsState extends ConsumerState<MyStudents> {
+  String _search = '';
+  String _courseFilter = 'All';
 
   @override
   Widget build(BuildContext context) {
+    final t = context.tl;
+    final tutor = ref.watch(authProvider);
+    final data = ref.watch(tutorDataProvider);
+    final notifier = ref.read(tutorDataProvider.notifier);
+
+    final students = tutor == null
+        ? <Student>[]
+        : notifier.studentsByIds(tutor.students);
+
+    // Course chips come from the classrooms this tutor actually runs.
+    final myClassrooms =
+        data.classrooms.where((c) => c.tutorId == (tutor?.id ?? '')).toList();
+    final courseNames = <String>{
+      for (final c in myClassrooms) notifier.courseById(c.courseId)?.name ?? '',
+    }..removeWhere((n) => n.isEmpty);
+    final chips = ['All', ...courseNames];
+
+    String courseLabelFor(String studentId) {
+      final names = myClassrooms
+          .where((c) => c.studentId == studentId)
+          .map((c) => notifier.courseById(c.courseId)?.name ?? '')
+          .where((n) => n.isNotEmpty)
+          .toList();
+      return names.isEmpty ? 'No active class' : names.join(', ');
+    }
+
+    final visible = students.where((s) {
+      final matchesSearch =
+          _search.isEmpty || s.name.toLowerCase().contains(_search);
+      final matchesCourse = _courseFilter == 'All' ||
+          courseLabelFor(s.id).contains(_courseFilter);
+      return matchesSearch && matchesCourse;
+    }).toList();
+
     return GestureDetector(
       onTap: () => FocusManager.instance.primaryFocus?.unfocus(),
-      child: SingleChildScrollView(
-        child: SizedBox(
-          height: MediaQuery.of(context).size.height,
-          width: MediaQuery.of(context).size.width,
-          child: Scaffold(
-            body: SafeArea(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(vertical: 8),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.start,
-                  children: [
-                    const SizedBox(
-                      height: 40,
-                    ),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        SizedBox(
-                          width: MediaQuery.of(context).size.width - 30,
-                          child: TextField(
-                            controller: _searchController,
-                            cursorHeight: 24,
-                            keyboardType: TextInputType.text,
-                            decoration: InputDecoration(
-                              contentPadding:
-                                  const EdgeInsets.symmetric(horizontal: 20),
-                              suffixIcon: const Icon(
-                                Icons.search_outlined,
-                                color: kBlueColor,
-                              ),
-                              border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(10),
-                              ),
-                              hintText: 'Search students by name...',
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(
-                      height: 20,
-                    ),
-                    const Row(
-                      mainAxisAlignment: MainAxisAlignment.start,
-                      children: [
-                        Padding(
-                          padding: EdgeInsets.symmetric(horizontal: 10),
-                          child: Text(
-                            'My Students',
-                            style: TextStyle(
-                              fontSize: 24,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(
-                      height: 10,
-                    ),
-                    Flexible(
-                      flex: 1,
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 10, vertical: 10),
-                        child: ListView.builder(
-                          itemCount: filteredStudents.length,
-                          itemBuilder: (context, index) {
-                            final student = filteredStudents[index];
-                            final studentName = student['name'] ?? '';
-                            final studentAge = student['age'] ?? '';
-                            final studentImage = student['userImage'] ?? '';
-
-                            return StudentsCard(
-                              name: studentName,
-                              age: studentAge.toString(),
-                              userImage: studentImage,
-                              studentId: student['id'],
-                            );
-                          },
-                        ),
-                      ),
-                    )
-                  ],
-                ),
-              ),
+      child: SafeArea(
+        bottom: false,
+        child: ListView(
+          padding: const EdgeInsets.fromLTRB(20, 20, 20, kTabBottomInset),
+          children: [
+            Text('My Students', style: TLText.screenTitle(t.text)),
+            const SizedBox(height: 16),
+            TLSearchField(
+              hint: 'Search students by name...',
+              onChanged: (v) => setState(() => _search = v.toLowerCase()),
             ),
-          ),
+            if (chips.length > 1) ...[
+              const SizedBox(height: 14),
+              TLChipBar(
+                children: [
+                  for (final chip in chips)
+                    TLChip(
+                      label: chip,
+                      selected: _courseFilter == chip,
+                      onTap: () => setState(() => _courseFilter = chip),
+                    ),
+                ],
+              ),
+            ],
+            const SizedBox(height: 16),
+            if (visible.isEmpty)
+              const TLEmptyState(
+                icon: Icons.people_outline,
+                title: 'No students found',
+                message: 'Accept a request and the student appears here.',
+              )
+            else
+              for (final student in visible)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: StudentsCard(
+                    studentId: student.id,
+                    userImage: student.userImage,
+                    name: student.name,
+                    courseLabel: courseLabelFor(student.id),
+                    progress: _progressFor(student.id, tutor?.id ?? ''),
+                  ),
+                ),
+          ],
         ),
       ),
     );
+  }
+
+  /// Share of the classroom's scheduled span that has already elapsed — the
+  /// only progress signal the local data model carries.
+  double? _progressFor(String studentId, String tutorId) {
+    final classroom =
+        ref.read(tutorDataProvider.notifier).classroomFor(studentId, tutorId);
+    if (classroom == null) return null;
+
+    final total = classroom.endTime.difference(classroom.startTime).inMinutes;
+    if (total <= 0) return null;
+    final elapsed = DateTime.now().difference(classroom.startTime).inMinutes;
+    return (elapsed / total).clamp(0.0, 1.0);
   }
 }

@@ -1,22 +1,21 @@
-import 'package:thetutorlink/Screens/ForgetPassword/forgetpassword.dart';
-import 'package:thetutorlink/Screens/Onboarding/onboarding.dart';
-import 'package:thetutorlink/Screens/Profile/userProfileScreen.dart';
-import 'package:thetutorlink/Screens/SignIn/sign_in_screen.dart';
+import 'package:flutter/widgets.dart';
 
-import 'package:thetutorlink/Screens/Splash_Screen/splash.dart';
-import 'package:thetutorlink/Components/home.dart';
-import 'package:flutter/cupertino.dart';
-
+import '../Screens/ChatScreens/chatPage.dart';
 import '../Screens/HomeScreens/dashboard.dart';
+import '../Screens/Onboarding/onboarding.dart';
+import '../Screens/Profile/userProfileScreen.dart';
+import '../Screens/SignIn/sign_in_screen.dart';
+import '../Screens/Splash_Screen/splash.dart';
+import 'home.dart';
 
+/// Named routes for the flows that are entered by name; everything reached
+/// from a card or list is pushed with a constructed route instead.
 Map<String, WidgetBuilder> routes = {
-  SplashScreen.routeName: (context) => SplashScreen(),
-  OnboardScreen.routeName: (context) => OnboardScreen(),
-
-  SignInScreen.routeName: (context) => SignInScreen(),
-  ResetPasswordScreen.routeName: (context) => ResetPasswordScreen(),
-  HomeScreenBuilder.routeName: (context) => HomeScreenBuilder(),
-
- DashBoardScreen.routeName: (context) => DashBoardScreen(),
-  UserProfileScreen.routeName: (context) => UserProfileScreen(),
+  SplashScreen.routeName: (context) => const SplashScreen(),
+  OnboardScreen.routeName: (context) => const OnboardScreen(),
+  SignInScreen.routeName: (context) => const SignInScreen(),
+  HomeScreensBuilder.routeName: (context) => const HomeScreensBuilder(),
+  DashBoardScreen.routeName: (context) => const DashBoardScreen(),
+  ChatPage.routeName: (context) => const ChatPage(),
+  UserProfileScreen.routeName: (context) => const UserProfileScreen(),
 };

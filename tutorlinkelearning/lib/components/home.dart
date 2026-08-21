@@ -1,232 +1,115 @@
-import 'package:tutorlinkelearning/Screens/ChatRoom/chatheadpage.dart';
-import 'package:tutorlinkelearning/Screens/HomeScreens/allcourses.dart';
-import 'package:tutorlinkelearning/Screens/HomeScreens/books.dart';
-import 'package:tutorlinkelearning/Screens/HomeScreens/dashboard.dart';
-import 'package:tutorlinkelearning/Screens/HomeScreens/mycourses.dart';
-import 'package:tutorlinkelearning/Screens/Profile/userProfileScreen.dart';
-import 'package:tutorlinkelearning/constants.dart';
 import 'package:flutter/material.dart';
 
+import '../Screens/ChatRoom/aithread.dart';
+import '../Screens/HomeScreens/allcourses.dart';
+import '../Screens/HomeScreens/books.dart';
+import '../Screens/HomeScreens/dashboard.dart';
+import '../Screens/HomeScreens/mycourses.dart';
+import '../Screens/Profile/userProfileScreen.dart';
+import '../theme/app_tokens.dart';
+import '../theme/app_widgets.dart';
+
+/// The signed-in shell: five tabs behind a frosted bottom bar, matching the
+/// design's Home / My Courses / Explore / Books / Profile order.
+///
+/// The bar floats over the content (the tabs pad their own bottoms), which is
+/// what gives the translucent blur something to blur.
 class HomeScreensBuilder extends StatefulWidget {
   static String routeName = 'HomeScreensBuilder';
+
+  const HomeScreensBuilder({Key? key, this.initialTab = 0}) : super(key: key);
+
+  final int initialTab;
 
   @override
   State<HomeScreensBuilder> createState() => _HomeScreensBuilderState();
 }
 
 class _HomeScreensBuilderState extends State<HomeScreensBuilder> {
-  int currentTab = 0;
-  final List<Widget> screens = [
-    DashBoardScreen(),
-    const Books(),
-    UserProfileScreen(),
-    const Mycourses(),
-    Allcourses(
-      showNewCourses: false,
+  static const List<TLNavItem> _items = [
+    TLNavItem(
+      icon: Icons.home_outlined,
+      activeIcon: Icons.home_rounded,
+      label: 'Home',
+    ),
+    TLNavItem(
+      icon: Icons.school_outlined,
+      activeIcon: Icons.school_rounded,
+      label: 'My Courses',
+    ),
+    TLNavItem(
+      icon: Icons.explore_outlined,
+      activeIcon: Icons.explore_rounded,
+      label: 'Explore',
+    ),
+    TLNavItem(
+      icon: Icons.menu_book_outlined,
+      activeIcon: Icons.menu_book_rounded,
+      label: 'Books',
+    ),
+    TLNavItem(
+      icon: Icons.person_outline_rounded,
+      activeIcon: Icons.person_rounded,
+      label: 'Profile',
     ),
   ];
 
-  final PageStorageBucket bucket = PageStorageBucket();
-  Widget currentScreen = DashBoardScreen();
+  late int _tab = widget.initialTab;
 
-  void openDrawer() {
-    Scaffold.of(context).openDrawer();
-  }
+  /// Each tab keeps its own Navigator-free page; IndexedStack preserves their
+  /// scroll offsets and field contents across switches.
+  late final List<Widget> _screens = const [
+    DashBoardScreen(),
+    Mycourses(),
+    Allcourses(showNewCourses: false),
+    Books(),
+    UserProfileScreen(),
+  ];
+
+  /// Lets a tab hand the user to another tab — "View all" jumps to Explore.
+  void _goTo(int index) => setState(() => _tab = index);
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      body: PageStorage(
-        child: currentScreen,
-        bucket: bucket,
-      ),
-      floatingActionButton: FloatingActionButton(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        onPressed: () {
-          //To navigate to the courses screen
-          //TODO: Later in hours
-          setState(() {
-            currentScreen = Allcourses(
-              showNewCourses: false,
-            );
-            currentTab = 4;
-          });
-        },
-        child: const Icon(
-          Icons.add,
-          size: 30,
+    return HomeTabScope(
+      goToTab: _goTo,
+      child: Scaffold(
+        backgroundColor: context.tl.bg,
+        extendBody: true,
+        body: IndexedStack(index: _tab, children: _screens),
+        // Sits just above the nav bar so the assistant is one tap away from
+        // any tab.
+        floatingActionButton: const Padding(
+          padding: EdgeInsets.only(bottom: 8),
+          child: AiFab(),
         ),
-      ),
-      floatingActionButtonLocation:
-          FloatingActionButtonLocation.miniCenterDocked,
-      bottomNavigationBar: BottomAppBar(
-        shape: const CircularNotchedRectangle(),
-        notchMargin: 10,
-        child: Container(
-          width: MediaQuery.of(context).size.width,
-          height: 60,
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: <Widget>[
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  MaterialButton(
-                    minWidth: 30,
-                    onPressed: () {
-                      setState(() {
-                        currentScreen = DashBoardScreen();
-                        currentTab = 0;
-                      });
-                    },
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Image.asset(
-                          'assets/icons/homepage.png',
-                          color: currentTab == 0 ? kBlueColor : Colors.black38,
-                          height: 30,
-                          width: 30,
-                        ),
-                        Text(
-                          'Dashboard',
-                          style: TextStyle(
-                              fontSize: 10,
-                              color: currentTab == 0
-                                  ? kBlueColor
-                                  : Colors.black38),
-                        )
-                      ],
-                    ),
-                  ),
-                  MaterialButton(
-                    minWidth: 30,
-                    onPressed: () {
-                      setState(() {
-                        currentScreen = const Mycourses();
-                        currentTab = 1;
-                      });
-                    },
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Image.asset(
-                          'assets/icons/e-learning.png',
-                          color: currentTab == 1 ? kBlueColor : Colors.black38,
-                          height: 30,
-                          width: 40,
-                        ),
-                        Text(
-                          'My Courses',
-                          style: TextStyle(
-                              fontSize: 10,
-                              color: currentTab == 1
-                                  ? kBlueColor
-                                  : Colors.black38),
-                        )
-                      ],
-                    ),
-                  )
-                ],
-              ),
-              // Right tab side of the navigation bar
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  MaterialButton(
-                    minWidth: 50,
-                    onPressed: () {
-                      setState(() {
-                        currentScreen = const Books();
-                        currentTab = 2;
-                      });
-                    },
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Image.asset(
-                          'assets/icons/book.png',
-                          color: currentTab == 2 ? kBlueColor : Colors.black38,
-                          height: 30,
-                          width: 40,
-                        ),
-                        Text(
-                          'Books',
-                          style: TextStyle(
-                              color: currentTab == 2
-                                  ? kBlueColor
-                                  : Colors.black38),
-                        )
-                      ],
-                    ),
-                  ),
-                  MaterialButton(
-                    minWidth: 30,
-                    onPressed: () {
-                      setState(() {
-                        currentScreen = UserProfileScreen();
-                        currentTab = 3;
-                      });
-                    },
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Image.asset(
-                          'assets/icons/user.png',
-                          color: currentTab == 3 ? kBlueColor : Colors.black38,
-                          height: 30,
-                          width: 30,
-                        ),
-                        Text(
-                          'Profile',
-                          style: TextStyle(
-                              color: currentTab == 3
-                                  ? kBlueColor
-                                  : Colors.black38),
-                        )
-                      ],
-                    ),
-                  )
-                ],
-              )
-            ],
-          ),
-        ),
-      ),
-      drawer: Drawer(
-        child: ListView(
-          padding: EdgeInsets.zero,
-          children: <Widget>[
-            const DrawerHeader(
-              decoration: BoxDecoration(color: kBlueColor),
-              child: Text(
-                "TutorLink\n Menu",
-                style: TextStyle(color: kWhiteColor, fontSize: 24),
-              ),
-            ),
-            ListTile(
-              leading: const Icon(Icons.bookmark),
-              title: const Text('Booksmarks'),
-              onTap: () {
-                Navigator.pushNamed(context, "BookMarksScreen");
-              },
-            ),
-            ListTile(
-              leading: Icon(Icons.chat_rounded),
-              title: Text('Chatroom'),
-              onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) =>
-                        ChatPage(), //chat page for the user and his subscribed course with tutor
-                  ),
-                );
-              },
-            )
-          ],
+        bottomNavigationBar: TLBottomNav(
+          currentIndex: _tab,
+          onTap: _goTo,
+          items: _items,
         ),
       ),
     );
   }
 }
+
+/// Exposes tab switching to descendants without threading callbacks through
+/// every screen.
+class HomeTabScope extends InheritedWidget {
+  const HomeTabScope({
+    Key? key,
+    required this.goToTab,
+    required Widget child,
+  }) : super(key: key, child: child);
+
+  final void Function(int index) goToTab;
+
+  static HomeTabScope? maybeOf(BuildContext context) =>
+      context.dependOnInheritedWidgetOfExactType<HomeTabScope>();
+
+  @override
+  bool updateShouldNotify(HomeTabScope oldWidget) => false;
+}
+
+/// Bottom padding a tab needs so its last row clears the floating nav bar.
+const double kTabBottomInset = 96;

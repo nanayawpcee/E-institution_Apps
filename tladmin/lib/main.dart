@@ -1,26 +1,29 @@
-import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
-import 'package:tladmin/Screens/Splash/splashscreen.dart';
-import 'package:tladmin/utils/routes.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import 'firebase_options.dart';
+import 'Screens/Splash/splashscreen.dart';
+import 'theme/app_theme.dart';
+import 'utils/routes.dart';
 
 Future<void> main() async {
-  WidgetsFlutterBinding.ensureInitialized();//firebase initialisation in order to connect to the firebase it comes with core dependencies
-  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
-  runApp(MyApp());
+  WidgetsFlutterBinding.ensureInitialized();
+  runApp(const ProviderScope(child: MyApp()));
 }
 
-class MyApp extends StatelessWidget {
+class MyApp extends ConsumerWidget {
+  const MyApp({Key? key}) : super(key: key);
+
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     return MaterialApp(
-      theme: ThemeData(
-          textTheme: GoogleFonts.poppinsTextTheme(Theme.of(context).textTheme)),
       title: 'TutorLink Admin',
       debugShowCheckedModeBanner: false,
-      home: SplashScreen(),
+      theme: TLTheme.light(),
+      darkTheme: TLTheme.dark(),
+      // The topbar's sun/moon control drives this, so the console never falls
+      // back to the OS setting mid-session.
+      themeMode: ref.watch(themeModeProvider),
+      home: const SplashScreen(),
       routes: routes,
     );
   }

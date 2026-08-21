@@ -13,18 +13,19 @@ Future<void> showMaterialDialog(BuildContext context, Function(List<File>) onSen
     builder: (BuildContext context) {
       return StatefulBuilder(
         builder: (context, setState) {
-          Future<void> _pickFiles() async {
-            FilePickerResult? result = await FilePicker.platform.pickFiles(
+          Future<void> pickFiles() async {
+            final files = await FilePicker.pickFiles(
               type: FileType.custom,
               allowedExtensions: ['pdf', 'doc', 'docx', 'ppt', 'pptx'],
-              allowMultiple: true,
             );
 
-            if (result != null && result.files.isNotEmpty) {
+            if (files.isNotEmpty) {
               setState(() {
-                selectedFiles =
-                    result.files.map((file) => File(file.path!)).toList();
-                isFilesAdded = true;
+                selectedFiles = files
+                    .where((file) => file.path != null)
+                    .map((file) => File(file.path!))
+                    .toList();
+                isFilesAdded = selectedFiles.isNotEmpty;
               });
             }
           }
@@ -60,7 +61,7 @@ Future<void> showMaterialDialog(BuildContext context, Function(List<File>) onSen
                 onPressed: isLoading
                     ? null
                     : () async {
-                        await _pickFiles();
+                        await pickFiles();
                       },
                 child: const Text('Add'),
               ),

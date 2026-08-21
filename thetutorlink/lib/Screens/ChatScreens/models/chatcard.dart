@@ -1,91 +1,89 @@
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
-import 'package:thetutorlink/constants.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:intl/intl.dart';
 
+import '../../../providers/tutor_data.dart';
+import '../../../services/local_auth_service.dart';
+import '../../../theme/app_text.dart';
+import '../../../theme/app_tokens.dart';
+import '../../../theme/app_widgets.dart';
+import '../../Profile/userProfileScreen.dart' show TLAvatar;
 import '../interactionpage.dart';
 
-class ChatCard extends StatefulWidget {
-  @override
-  State<ChatCard> createState() => _ChatCardState();
-  final String name;
-  final String studentId;
-  final String userImage;
-
-  const ChatCard({
+/// Conversation row: avatar, student name, last message preview and its time.
+class StudentChatCard extends ConsumerWidget {
+  const StudentChatCard({
+    Key? key,
     required this.studentId,
-    required this.userImage,
-    required this.name,
-  });
-}
+    required this.studentName,
+    required this.imageUrl,
+  }) : super(key: key);
 
-class _ChatCardState extends State<ChatCard> {
-  final String tutorId = FirebaseAuth.instance.currentUser!.uid;
+  final String studentId;
+  final String studentName;
+  final String imageUrl;
 
   @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: () {
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (context) => InteractionPage(
-              name: widget.name,
-              tutorId: tutorId,
-              studentId: widget.studentId,
-            ),
+  Widget build(BuildContext context, WidgetRef ref) {
+    final t = context.tl;
+    final tutorId = ref.watch(authProvider)?.id ?? '';
+    final messages = ref.watch(tutorDataProvider).chats[
+            TutorAppDataNotifier.chatKey(tutorId, studentId)] ??
+        const [];
+    final last = messages.isEmpty ? null : messages.last;
+
+    return TLCard(
+      padding: const EdgeInsets.all(12),
+      onTap: () => Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => InteractionPage(
+            name: studentName,
+            studentId: studentId,
+            tutorId: tutorId,
           ),
-        );
-      },
-      child: Card(
-        shadowColor: kBlueColor,
-        surfaceTintColor: kBlueColor,
-        elevation: 8,
-        child: Padding(
-          padding: const EdgeInsets.all(8),
-          child: Container(
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(8),
-            ),
-            height: 75,
-            width: MediaQuery.of(context).size.width - 32,
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
+        ),
+      ),
+      child: Row(
+        children: [
+          TLAvatar(imagePath: imageUrl, size: 48),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Material(
-                  type: MaterialType.transparency,
-                  child: Container(
-                    width: 75,
-                    decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(8),
-                        color: kBlueColor,
-                        image: DecorationImage(
-                            image: NetworkImage(widget.userImage),
-                            fit: BoxFit.fill)),
-                  ),
-                ),
-                const SizedBox(
-                  width: 16,
-                ),
-                Flexible(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Material(
-                        color: Colors.transparent,
-                        child: Text(
-                          widget.name,
-                          overflow: TextOverflow.ellipsis,
-                          maxLines: 2,
-                          style: Theme.of(context).textTheme.titleLarge,
-                        ),
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        studentName,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TLText.cardTitle(t.text)
+                            .copyWith(fontSize: 14.5),
                       ),
-                    ],
-                  ),
-                )
+                    ),
+                    if (last != null)
+                      Text(
+                        DateFormat.jm().format(last.time),
+                        style: TLText.meta(t.textSub),
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  last == null
+                      ? 'Say hello'
+                      : '${last.senderId == tutorId ? 'You: ' : ''}'
+                          '${last.message}',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TLText.meta(t.textSub).copyWith(fontSize: 12.5),
+                ),
               ],
             ),
           ),
-        ),
+        ],
       ),
     );
   }

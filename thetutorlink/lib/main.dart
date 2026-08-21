@@ -1,41 +1,10 @@
 import 'package:awesome_notifications/awesome_notifications.dart';
-import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
-import 'package:firebase_core/firebase_core.dart';
-import 'package:thetutorlink/Components/routes.dart';
-import 'package:thetutorlink/constants.dart';
-import 'package:thetutorlink/firebase_options.dart';
-import 'package:thetutorlink/utils/user_state.dart';
-import 'package:google_fonts/google_fonts.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-Future<void> backgroundHandler(RemoteMessage message) async {
-  String? title = message.notification!.title;
-  String? body = message.notification!.body;
-  AwesomeNotifications().createNotification(
-      content: NotificationContent(
-          id: 123,
-          channelKey: 'request_channel',
-          color: kWhiteColor,
-          title: title,
-          body: body,
-          category: NotificationCategory.Event,
-          wakeUpScreen: true,
-          fullScreenIntent: true,
-          autoDismissible: false,
-          backgroundColor: Colors.orange),
-      actionButtons: [
-        NotificationActionButton(
-            key: "Accept",
-            label: "Accept Request",
-            color: Colors.green,
-            autoDismissible: true),
-        NotificationActionButton(
-            key: "Reject",
-            label: "Reject Request",
-            color: kRedColor,
-            autoDismissible: true)
-      ]);
-}
+import 'Components/routes.dart';
+import 'theme/app_theme.dart';
+import 'utils/user_state.dart';
 
 void main() async {
   AwesomeNotifications().initialize(null, [
@@ -52,47 +21,25 @@ void main() async {
   ]);
 
   WidgetsFlutterBinding.ensureInitialized();
-  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
-  
 
-  runApp(MyApp());
+  runApp(const ProviderScope(child: MyApp()));
 }
 
-class MyApp extends StatelessWidget {
-  final Future<FirebaseApp> _intialization = Firebase.initializeApp();
+class MyApp extends ConsumerWidget {
+  const MyApp({Key? key}) : super(key: key);
 
-  // This widget is the root of your application.
   @override
-  Widget build(BuildContext context) {
-    return FutureBuilder(
-        future: _intialization,
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const MaterialApp(
-              debugShowCheckedModeBanner: false,
-              home: Scaffold(
-                body: Center(
-                    child: Center(
-                  child: Text('Welcome To TutorLink App'),
-                )),
-              ),
-            );
-          } else if (snapshot.hasError) {
-            return const MaterialApp(
-                debugShowCheckedModeBanner: false,
-                home: Center(
-                    child: Center(
-                  child: Text('An error occurred, Please Wait...'),
-                )));
-          }
-          return MaterialApp(
-             theme: ThemeData(
-          textTheme: GoogleFonts.poppinsTextTheme(Theme.of(context).textTheme)),
-            debugShowCheckedModeBanner: false,
-            title: "TutorLink App",
-            home: UserState(),
-            routes: routes,
-          );
-        });
+  Widget build(BuildContext context, WidgetRef ref) {
+    return MaterialApp(
+      title: 'TutorLink Tutor',
+      debugShowCheckedModeBanner: false,
+      theme: TLTheme.light(),
+      darkTheme: TLTheme.dark(),
+      // The profile screen's Dark mode switch drives this, so the app never
+      // flips to the OS setting mid-session.
+      themeMode: ref.watch(themeModeProvider),
+      home: const UserState(),
+      routes: routes,
+    );
   }
 }

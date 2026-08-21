@@ -1,70 +1,67 @@
 import 'package:flutter/material.dart';
-import 'package:permission_handler/permission_handler.dart';
 
+import '../../theme/app_text.dart';
+import '../../theme/app_tokens.dart';
+import '../../theme/app_widgets.dart';
 import '../../utils/check_permission.dart';
 
+/// Class settings: the permissions the classroom needs to download material.
 class SettingsPage extends StatefulWidget {
+  const SettingsPage({Key? key}) : super(key: key);
+
   @override
-  _SettingsPageState createState() => _SettingsPageState();
+  State<SettingsPage> createState() => _SettingsPageState();
 }
 
 class _SettingsPageState extends State<SettingsPage> {
-  final CheckPermission permissionChecker = CheckPermission();
+  final _permissions = CheckPermission();
+  bool? _storageGranted;
 
   @override
   void initState() {
     super.initState();
-    _checkAndRequestStoragePermission(); // Check and request storage permission when the page loads
+    _refresh();
   }
 
-  Future<void> _checkAndRequestStoragePermission() async {
-    bool hasStoragePermission = await permissionChecker.isStoragePermission();
-    if (!hasStoragePermission) {
-      // Show a dialog to inform the user about permission requirement
-      // showDialog  to display a message to the user
-
-      showDialog(
-        context: context,
-        builder: (BuildContext context) {
-          return AlertDialog(
-            title: Text('Storage Permission Required'),
-            content: Text(
-                'This app requires storage permission to function properly.'),
-            actions: [
-              TextButton(
-                child: Text('Cancel'),
-                onPressed: () {
-                  Navigator.pop(context);
-                },
-              ),
-              TextButton(
-                child: Text('Open Settings'),
-                onPressed: () {
-                  openAppSettings(); // Open the app settings so the user can grant permission
-                },
-              ),
-            ],
-          );
-        },
-      );
-    }
+  Future<void> _refresh() async {
+    final granted = await _permissions.isStoragePermission();
+    if (mounted) setState(() => _storageGranted = granted);
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: Text('Settings Page'),
-        leading: IconButton(
-          icon: Icon(Icons.menu),
-          onPressed: () {
-            Scaffold.of(context).openDrawer();
-          },
+    final t = context.tl;
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(20, 0, 20, 32),
+      children: [
+        Text('Permissions', style: TLText.cardTitle(t.text)),
+        const SizedBox(height: 12),
+        TLMenuGroup(
+          children: [
+            TLMenuRow(
+              label: 'Storage access',
+              leading: Icons.sd_storage_outlined,
+              onTap: _refresh,
+              trailing: Text(
+                _storageGranted == null
+                    ? 'Checking…'
+                    : _storageGranted!
+                        ? 'Granted'
+                        : 'Not granted',
+                style: TLText.sub(
+                  _storageGranted == true ? TLTokens.success : t.textSub,
+                ),
+              ),
+            ),
+          ],
         ),
-      ),
-      body: Center(
-        child: Text('Settings Page Content'),
-      ),
+        const SizedBox(height: 10),
+        Text(
+          'Storage access lets you download resources and assignments to your '
+          'device. Tap the row to re-check after changing it in system settings.',
+          style: TLText.meta(t.textSub).copyWith(height: 1.5),
+        ),
+      ],
     );
   }
 }

@@ -1,100 +1,52 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
-import '../constants.dart';
 
-class ReviewCard extends StatefulWidget {
-  @override
-  State<ReviewCard> createState() => _ReviewCardState();
-  final String? courseId;
-  final String postedBy;
-  final String message;
-  final Timestamp timePosted;
-  final String userImage;
-  final String? tutorId;
+import '../Screens/Profile/userProfileScreen.dart' show TLAvatar;
+import '../models/app_models.dart';
+import '../theme/app_text.dart';
+import '../theme/app_tokens.dart';
+import '../theme/app_widgets.dart';
 
-  const ReviewCard(
-      {required this.postedBy,
-      required this.message,
-      required this.timePosted,
-      required this.userImage,
-      this.courseId,
-      this.tutorId});
-}
+/// Review row on the recessed surface: reviewer avatar, name, date, message.
+class ReviewCard extends StatelessWidget {
+  const ReviewCard({Key? key, required this.review}) : super(key: key);
 
-class _ReviewCardState extends State<ReviewCard> {
-  String formatDate(Timestamp timestamp) {
-    DateTime dateTime = timestamp.toDate();
-    String formattedDate = DateFormat('yyyy-MM-dd').format(dateTime);
-    return formattedDate;
-  }
+  final Review review;
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      elevation: 4,
-      surfaceTintColor: kBlueColor,
-      child: Padding(
-        padding: const EdgeInsets.only(bottom: 5, left: 10, right: 10, top: 10),
-        child: Container(
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(8),
-          ),
-          height: 80,
-          width: MediaQuery.of(context).size.width - 32,
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Container(
-                width: 40,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: kBlueColor,
-                  image: DecorationImage(
-                    fit: BoxFit.fill,
-                    image: NetworkImage(
-                      widget.userImage,
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(
-                width: 16,
-              ),
-              Flexible(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+    final t = context.tl;
+    return TLCard(
+      recessed: true,
+      radius: 14,
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          TLAvatar(imagePath: review.userImage, size: 40),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
                   children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Material(
-                          color: Colors.transparent,
-                          child: Text(
-                            widget.postedBy,
-                            overflow: TextOverflow.ellipsis,
-                            maxLines: 1,
-                            style: const TextStyle(
-                                fontSize: 16, fontWeight: FontWeight.w700),
-                          ),
-                        ),
-                        Text(formatDate(widget.timePosted))
-                      ],
-                    ),
-                    Text(
-                      '${widget.message}',
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        letterSpacing: 0.5,
+                    Expanded(
+                      child: Text(
+                        review.postedBy,
+                        style: TLText.cardTitle(t.text).copyWith(fontSize: 14),
                       ),
-                      maxLines: 3,
                     ),
+                    Text(review.timePosted, style: TLText.meta(t.textSub)),
                   ],
                 ),
-              )
-            ],
+                const SizedBox(height: 4),
+                Text(
+                  review.message,
+                  style: TLText.sub(t.textSub).copyWith(height: 1.5),
+                ),
+              ],
+            ),
           ),
-        ),
+        ],
       ),
     );
   }

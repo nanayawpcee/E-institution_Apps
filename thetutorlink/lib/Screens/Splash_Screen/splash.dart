@@ -1,27 +1,40 @@
 import 'dart:async';
 
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:thetutorlink/Components/home.dart';
-import 'package:thetutorlink/constants.dart';
 import 'package:flutter/material.dart';
-import 'package:thetutorlink/Screens/Onboarding/onboarding.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-class SplashScreen extends StatefulWidget {
+import '../../Components/home.dart';
+import '../../services/local_auth_service.dart';
+import '../../theme/app_assets.dart';
+import '../../theme/app_text.dart';
+import '../../theme/app_tokens.dart';
+import '../Onboarding/onboarding.dart';
+
+/// Brand splash. Goes straight to the app when a session was restored,
+/// otherwise into onboarding.
+class SplashScreen extends ConsumerStatefulWidget {
   static String routeName = 'SplashScreen';
 
+  const SplashScreen({Key? key}) : super(key: key);
+
   @override
-  State<SplashScreen> createState() => _SplashScreenState();
+  ConsumerState<SplashScreen> createState() => _SplashScreenState();
 }
 
-class _SplashScreenState extends State<SplashScreen> {
-  late Timer _timer;
-  final FirebaseAuth _auth = FirebaseAuth.instance;
+class _SplashScreenState extends ConsumerState<SplashScreen> {
+  late final Timer _timer;
 
   @override
   void initState() {
     super.initState();
-    _timer = Timer(Duration(milliseconds: 5000), () {
-      _navigateToOnboard();
+    _timer = Timer(const Duration(milliseconds: 2200), () {
+      if (!mounted) return;
+      final signedIn = ref.read(authProvider) != null;
+      Navigator.pushNamedAndRemoveUntil(
+        context,
+        signedIn ? HomeScreensBuilder.routeName : OnboardScreen.routeName,
+        (route) => false,
+      );
     });
   }
 
@@ -31,42 +44,35 @@ class _SplashScreenState extends State<SplashScreen> {
     super.dispose();
   }
 
-  void _navigateToOnboard() {
-    User? user = _auth.currentUser;
-
-    if (user != null) {
-      Navigator.pushNamedAndRemoveUntil(
-          context, HomeScreenBuilder.routeName, (route) => false);
-    } else {
-      Navigator.pushNamedAndRemoveUntil(
-          context, OnboardScreen.routeName, (route) => false);
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
+    final t = context.tl;
     return Scaffold(
-        backgroundColor: kWhiteColor,
-        body: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
+      backgroundColor: t.bg,
+      body: Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
           children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Container(
-                    height: 150,
-                    width: 150,
-                    child: Image.asset('assets/images/Logop.png')),
-              ],
+            Image.asset(
+              TLAssets.logo,
+              width: 220,
+              fit: BoxFit.contain,
+              semanticLabel: 'TutorLink',
             ),
-            const Text(
-              "E-Learning Platform",
-              style: TextStyle(
-                fontWeight: FontWeight.bold,
-                fontSize: 16,
+            const SizedBox(height: 18),
+            Text('For Tutors', style: TLText.lead(t.textSub)),
+            const SizedBox(height: 34),
+            const SizedBox(
+              width: 22,
+              height: 22,
+              child: CircularProgressIndicator(
+                strokeWidth: 2.4,
+                color: TLTokens.primary,
               ),
-            )
+            ),
           ],
-        ));
+        ),
+      ),
+    );
   }
 }

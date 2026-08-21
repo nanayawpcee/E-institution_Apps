@@ -1,47 +1,36 @@
-import 'package:tutorlinkelearning/constants.dart';
-import 'package:flutter/material.dart';
+import '../theme/app_assets.dart';
 
+/// Copy and illustration for each onboarding slide, matching the design's
+/// three-step introduction.
 class OnboardContent {
-  final String image, title, description;
+  const OnboardContent({
+    required this.image,
+    required this.title,
+    required this.description,
+  });
 
-  OnboardContent(
-      {required this.image, required this.title, required this.description});
+  final String image;
+  final String title;
+  final String description;
 }
 
-//onboard data with svgs
 final List<OnboardContent> onboard_data = [
   OnboardContent(
-      image: "assets/svgs/onboard0.svg",
-      title: "Welcome to TutorLink",
-      description:
-          "Welcome as you learn  world changing skills to get a better job"),
+    image: TLAssets.onboarding[0],
+    title: 'Welcome to TutorLink',
+    description:
+        'Learn world-changing skills and get closer to a better job.',
+  ),
   OnboardContent(
-      image: "assets/svgs/onboard1.svg",
-      title: "choose Your course",
-      description:
-          "Choose the course of your choice and gain knowledge and experience in it"),
+    image: TLAssets.onboarding[1],
+    title: 'Choose your course',
+    description:
+        'Pick the course that fits you and gain real knowledge and experience.',
+  ),
   OnboardContent(
-      image: "assets/svgs/onboard2.svg",
-      title: "Get Certified",
-      description:
-          "Start learning and get certified after your training to get a lucrative job"),
+    image: TLAssets.onboarding[2],
+    title: 'Get certified',
+    description:
+        'Finish your training and get certified to unlock better opportunities.',
+  ),
 ];
-
-class DotIndicator extends StatelessWidget {
-  const DotIndicator({super.key, this.isActive = false});
-
-  final bool isActive;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      height: 8,
-      width: 8,
-      margin: EdgeInsets.symmetric(vertical: 10, horizontal: 3),
-      decoration: BoxDecoration(
-          shape: BoxShape.circle, color: isActive ? kPrimaryColor : kBlueColor),
-    );
-  }
-}
-
-

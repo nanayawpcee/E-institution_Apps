@@ -1,249 +1,232 @@
-import 'package:awesome_notifications/awesome_notifications.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:firebase_messaging/firebase_messaging.dart';
-import 'package:tutorlinkelearning/components/coursecard.dart';
-import 'package:tutorlinkelearning/components/courses.dart';
-import 'package:tutorlinkelearning/constants.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
+import '../../components/coursecard.dart';
+import '../../components/home.dart';
+import '../../providers/student_data.dart';
+import '../../services/chat_read_state.dart';
+import '../../services/local_auth_service.dart';
+import '../../theme/app_assets.dart';
+import '../../theme/app_text.dart';
+import '../../theme/app_tokens.dart';
+import '../../theme/app_widgets.dart';
+import '../Bookmark/bookmarkedcourses.dart';
+import '../ChatRoom/chatheadpage.dart';
 import 'allcourses.dart';
 
-class DashBoardScreen extends StatefulWidget {
+/// Home tab: greeting, search, the "new this week" banner, department filters
+/// and the course list.
+class DashBoardScreen extends ConsumerStatefulWidget {
   static String routeName = 'DashBoardScreen';
+
+  const DashBoardScreen({Key? key}) : super(key: key);
+
   @override
-  State<DashBoardScreen> createState() => _DashBoardScreenState();
+  ConsumerState<DashBoardScreen> createState() => _DashBoardScreenState();
 }
 
-class _DashBoardScreenState extends State<DashBoardScreen> {
-  final FirebaseAuth _auth = FirebaseAuth.instance;
-  String? userName = '';
-  String searchText = '';
+class _DashBoardScreenState extends ConsumerState<DashBoardScreen> {
+  static const List<String> _departments = [
+    'All',
+    'Computer Science',
+    'Mathematics',
+    'Biology',
+    'UI/UX',
+  ];
 
-  String selectedDepartment = 'All';
-
-  void updateSelectedDepartment(String department) {
-    setState(() {
-      selectedDepartment = department;
-    });
-  }
-
-  @override
-  void initState() {
-    super.initState();
-    _loadUserData();
-    FirebaseMessaging.onMessage.listen((RemoteMessage message) {
-      String? title = message.notification!.title;
-      String? body = message.notification!.body;
-      AwesomeNotifications().createNotification(
-          content: NotificationContent(
-              id: 123,
-              channelKey: 'request_channel',
-              color: Colors.white,
-              title: title,
-              body: body,
-              category: NotificationCategory.Call,
-              wakeUpScreen: true,
-              fullScreenIntent: true,
-              autoDismissible: false,
-              backgroundColor: Colors.orange),
-          actionButtons: [
-            NotificationActionButton(
-                key: "Ok",
-                label: "Okay",
-                color: kBlueColor,
-                autoDismissible: true),
-          ]);
-    });
-  }
-
-  Future<void> _loadUserData() async {
-    final currentUser = _auth.currentUser;
-    if (currentUser != null) {
-      final userData = await FirebaseFirestore.instance
-          .collection('Students')
-          .doc(currentUser.uid)
-          .get();
-      final fullName = userData['name'] ?? '';
-      userName = getFirstName(fullName);
-      setState(() {});
-    }
-  }
-
-  String getFirstName(String fullName) {
-    if (fullName.isEmpty) return '';
-
-    List<String> names = fullName.split(' ');
-    String firstName = names[0];
-
-    return firstName;
-  }
+  String _search = '';
+  String _department = 'All';
 
   @override
   Widget build(BuildContext context) {
+    final t = context.tl;
+    final student = ref.watch(authProvider);
+    final data = ref.watch(studentDataProvider);
+
+    final firstName =
+        (student?.name ?? '').split(' ').firstWhere((s) => s.isNotEmpty,
+            orElse: () => 'there');
+
+    final courses = data.courses.where((course) {
+      final matchesDept =
+          _department == 'All' || course.department == _department;
+      final matchesSearch = _search.isEmpty ||
+          course.name.toLowerCase().contains(_search.toLowerCase());
+      return matchesDept && matchesSearch;
+    }).toList();
+
     return GestureDetector(
       onTap: () => FocusManager.instance.primaryFocus?.unfocus(),
-      child: Scaffold(
-        body: SingleChildScrollView(
-          child: SafeArea(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 10),
-              child: Column(
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      GestureDetector(
-                          onTap: () {
-                            Scaffold.of(context).openDrawer();
-                          },
-                          child:
-                              SvgPicture.asset('assets/icons/hamburger.svg')),
-                    ],
-                  ),
-                  const SizedBox(
-                    height: 14,
-                  ),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.start,
-                    children: [
-                      RichText(
-                        text: TextSpan(
-                          style: Theme.of(context).textTheme.headlineMedium,
-                          children: <TextSpan>[
-                            const TextSpan(
-                              text: 'Hello, ',
-                              style: TextStyle(fontWeight: FontWeight.bold),
-                            ),
-                            TextSpan(
-                              text: userName,
-                              style: Theme.of(context)
-                                  .textTheme
-                                  .headlineSmall!
-                                  .copyWith(
-                                    color: kBlackColor900,
-                                  ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(
-                    height: 14,
-                  ),
-                  const Row(
-                    mainAxisAlignment: MainAxisAlignment.start,
+      child: SafeArea(
+        bottom: false,
+        child: ListView(
+          padding: const EdgeInsets.fromLTRB(20, 20, 20, kTabBottomInset),
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'What do you want to learn?',
-                        style: TextStyle(wordSpacing: 2),
-                      )
+                        'Hello, $firstName',
+                        style: TLText.screenTitle(t.text),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        'What do you want to learn today?',
+                        style: TLText.sub(t.textSub),
+                      ),
                     ],
                   ),
-                  const SizedBox(
-                    height: 20,
-                  ),
-                  TextField(
-                    cursorHeight: 24,
-                    keyboardType: TextInputType.text,
-                    decoration: InputDecoration(
-                      contentPadding:
-                          const EdgeInsets.symmetric(horizontal: 20),
-                      suffixIcon: const Icon(
-                        Icons.search_outlined,
-                        color: kBlueColor,
-                      ),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      hintText: 'Search...',
-                    ),
-                    onChanged: (value) {
-                      setState(() {
-                        searchText = value;
-                      });
-                    },
-                  ),
-                  const SizedBox(
-                    height: 30,
-                  ),
-                  SizedBox(
-                    height: MediaQuery.sizeOf(context).height / 6,
-                    child: Stack(children: [
-                      Container(
-                        decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(8),
-                            color: kGreyColor600,
-                            image: const DecorationImage(
-                                image:
-                                    AssetImage('assets/images/newcourse.jpeg'),
-                                fit: BoxFit.fill)),
-                      ),
-                      Positioned(
-                        bottom: 4,
-                        left: 8,
-                        child: ElevatedButton(
-                          onPressed: () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (context) =>
-                                    Allcourses(showNewCourses: true),
-                              ),
-                            );
-                          },
-                          child: const Text('View'),
-                        ),
-                      )
-                    ]),
-                  ),
-                  const SizedBox(
-                    height: 20,
-                  ),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      const Text(
-                        'Course',
-                        style: TextStyle(
-                            fontWeight: FontWeight.bold, fontSize: 20),
-                      ),
-                      GestureDetector(
-                        onTap: () {
-                          Navigator.pushNamed(context, 'Allcourses');
-                        },
-                        child: const Text(
-                          'View all',
-                          style: TextStyle(fontSize: 16, color: kBlueColor),
-                        ),
-                      )
-                    ],
-                  ),
-                  const SizedBox(
-                    height: 10,
-                  ),
-                  Row(
-                    children: [
-                      DepartmentsList(
-                          onDepartmentSelected: updateSelectedDepartment),
-                    ],
-                  ),
-                  const SizedBox(
-                    height: 12,
-                  ),
-                  SizedBox(
-                    height: 200,
-                    width: MediaQuery.of(context).size.width - 30,
-                    child: CourseCardListView(
-                      selectedDepartment: selectedDepartment,
-                      searchText: searchText,
+                ),
+                TLIconButton(
+                  icon: Icons.bookmark_border_rounded,
+                  onPressed: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => BookedMarked(),
                     ),
                   ),
-                ],
+                ),
+                const SizedBox(width: 10),
+                _ChatButton(
+                  onPressed: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (context) => ChatPage()),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 18),
+            TLSearchField(
+              hint: 'Search courses, tutors...',
+              onChanged: (v) => setState(() => _search = v),
+            ),
+            const SizedBox(height: 18),
+            _NewThisWeekBanner(
+              onTap: () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const Allcourses(showNewCourses: true),
+                ),
               ),
             ),
+            const SizedBox(height: 26),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.baseline,
+              textBaseline: TextBaseline.alphabetic,
+              children: [
+                Expanded(
+                  child: Text('Courses', style: TLText.sectionTitle(t.text)),
+                ),
+                InkWell(
+                  onTap: () => HomeTabScope.maybeOf(context)?.goToTab(2),
+                  child: Text(
+                    'View all',
+                    style: TLText.sub(TLTokens.primary)
+                        .copyWith(fontWeight: FontWeight.w600),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            TLChipBar(
+              children: [
+                for (final dept in _departments)
+                  TLChip(
+                    label: dept,
+                    selected: _department == dept,
+                    onTap: () => setState(() => _department = dept),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            if (courses.isEmpty)
+              const TLEmptyState(
+                icon: Icons.search_off_rounded,
+                title: 'No courses match',
+                message: 'Try another department or search term.',
+              )
+            else
+              for (final course in courses)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: CourseRow(course: course),
+                ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Promo banner pointing at courses published in the last week.
+///
+/// The bundled `newcourses` illustration already carries its own artwork and
+/// call to action, so the banner just frames it at the design's height.
+class _NewThisWeekBanner extends StatelessWidget {
+  const _NewThisWeekBanner({required this.onTap});
+
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = context.tl;
+    return Material(
+      color: t.cardAlt,
+      borderRadius: BorderRadius.circular(TLTokens.rXl),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: onTap,
+        child: SizedBox(
+          height: 92,
+          width: double.infinity,
+          child: SvgPicture.asset(
+            TLAssets.newCourses,
+            fit: BoxFit.cover,
+            alignment: Alignment.centerLeft,
+            semanticsLabel: 'New courses this week',
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Chat entry point in the header, badged when a tutor has written since the
+/// student last opened that thread.
+class _ChatButton extends ConsumerWidget {
+  const _ChatButton({required this.onPressed});
+
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final t = context.tl;
+    final student = ref.watch(authProvider);
+    final chats = ref.watch(studentDataProvider).chats;
+    ref.watch(chatReadProvider);
+    final read = ref.read(chatReadProvider.notifier);
+
+    final studentId = student?.id ?? '';
+    final unread = chats.entries.any(
+      (e) => read.isUnread(e.key, e.value, myId: studentId),
+    );
+
+    return Material(
+      color: t.cardAlt,
+      borderRadius: BorderRadius.circular(TLTokens.rMd),
+      child: InkWell(
+        onTap: onPressed,
+        borderRadius: BorderRadius.circular(TLTokens.rMd),
+        child: SizedBox(
+          width: 38,
+          height: 38,
+          child: Center(
+            child: TLChatIcon(color: t.text, size: 21, unread: unread),
           ),
         ),
       ),

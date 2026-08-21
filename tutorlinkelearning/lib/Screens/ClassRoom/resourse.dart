@@ -1,93 +1,60 @@
 import 'package:flutter/material.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
-import '../../Components/resourcemangement.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import '../../components/resourcemangement.dart';
+import '../../providers/student_data.dart';
+import '../../theme/app_widgets.dart';
 import '../../utils/check_permission.dart';
 
-class ResourcePage extends StatefulWidget {
+/// Course materials the tutor has shared, inside the classroom.
+class ResourcePage extends ConsumerStatefulWidget {
+  const ResourcePage({
+    Key? key,
+    required this.studentId,
+    required this.courseId,
+  }) : super(key: key);
+
   final String studentId;
- 
   final String courseId;
-  const ResourcePage({required this.studentId,  required this.courseId});
 
   @override
-  State<ResourcePage> createState() => _ResourcePageState();
+  ConsumerState<ResourcePage> createState() => _ResourcePageState();
 }
 
-class _ResourcePageState extends State<ResourcePage> {
-  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
-
-   bool isPermission = false;
-  var checkAllPermissions = CheckPermission();
-
-  checkPermission() async {
-    var permission = await checkAllPermissions.isStoragePermission();
-    if (permission) {
-      setState(() {
-        isPermission = true;
-      });
-    }
-  }
+class _ResourcePageState extends ConsumerState<ResourcePage> {
+  final _permissions = CheckPermission();
 
   @override
   void initState() {
     super.initState();
-    checkPermission();
+    // Downloads need storage access; ask once when the tab first opens.
+    _permissions.isStoragePermission();
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Resources Screen'),
-        leading: IconButton(
-          icon: const Icon(Icons.menu),
-          onPressed: () {
-            Scaffold.of(context).openDrawer();
-          },
-        ),
-      ),
-      body: StreamBuilder(
-        stream: _firestore
-            .collection('Classroom')
-            .where('courseId', isEqualTo: widget.courseId)
-            .where('studentId', isEqualTo: widget.studentId)
-            .snapshots(),
-        builder: (context, snapshot) {
-          if (snapshot.hasError) {
-            return Text('Error: ${snapshot.error}');
-          }
+    ref.watch(studentDataProvider);
+    final classroom = ref
+        .read(studentDataProvider.notifier)
+        .classroomFor(widget.courseId, widget.studentId);
+    final resources = classroom?.resources ?? [];
 
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const CircularProgressIndicator();
-          }
+    if (resources.isEmpty) {
+      return const TLEmptyState(
+        icon: Icons.folder_open_rounded,
+        title: 'No resources yet',
+        message: 'Material your tutor shares will appear here.',
+      );
+    }
 
-          if (snapshot.data!.docs.isEmpty) {
-            return const Center(child: Text('No resources available.'));
-          }
-
-          return ListView.builder(
-            itemCount: snapshot.data!.docs.length,
-            itemBuilder: (context, index) {
-              final doc = snapshot.data!.docs[index];
-              final resources = doc['resources'] as List<dynamic>;
-              final timestamps = doc['timestamps'] as List<dynamic>;
-
-              return Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  for (int i = 0; i < resources.length; i++)
-                    ResourceItem(
-                      resourceTitle: resources[i]['title'],
-                      resourceUrl: resources[i]['url'],
-                      timestamp: timestamps[i]['time'].toDate(),
-                       
-                    ),
-                  const Divider(),
-                ],
-              );
-            },
-          );
-        },
+    return ListView.separated(
+      padding: const EdgeInsets.fromLTRB(20, 0, 20, 32),
+      itemCount: resources.length,
+      separatorBuilder: (_, __) => const SizedBox(height: 10),
+      itemBuilder: (context, i) => ResourceItem(
+        resourceTitle: resources[i].title,
+        resourceUrl: resources[i].url,
+        timestamp: resources[i].time,
       ),
     );
   }

@@ -1,174 +1,171 @@
-import 'package:tutorlinkelearning/Screens/SignUp/signupscreen.dart';
-import 'package:tutorlinkelearning/components/onboardContent.dart';
-import 'package:tutorlinkelearning/constants.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
+import '../../components/onboardContent.dart';
+import '../../theme/app_text.dart';
+import '../../theme/app_tokens.dart';
+import '../../theme/app_widgets.dart';
 import '../SignIn/sign_in_screen.dart';
+import '../SignUp/signupscreen.dart';
 
+/// Three-slide introduction: illustration, progress dots, copy, and a single
+/// advancing action that ends at sign-up.
 class OnboardScreen extends StatefulWidget {
-static String routeName = 'OnboardScreen';
+  static String routeName = 'OnboardScreen';
+
+  const OnboardScreen({Key? key}) : super(key: key);
+
   @override
   State<OnboardScreen> createState() => _OnboardScreenState();
 }
 
 class _OnboardScreenState extends State<OnboardScreen> {
-  late PageController _pageController;
+  final _controller = PageController();
+  int _index = 0;
 
-  int _pageIndex = 0;
-
-  @override
-  void initState() {
-    _pageController = PageController(initialPage: 0);
-    super.initState();
-  }
+  bool get _isLast => _index == onboard_data.length - 1;
 
   @override
   void dispose() {
-    _pageController.dispose();
+    _controller.dispose();
     super.dispose();
   }
 
-  void _navigateToSignUpPage() {
-    if (_pageIndex < onboard_data.length - 1) {
-      // Navigate to the next page
-      _pageController.nextPage(
-        duration: Duration(milliseconds: 300),
-        curve: Curves.ease,
-      );
-    } else {
+  void _next() {
+    if (_isLast) {
       Navigator.pushNamedAndRemoveUntil(
           context, SignUpScreen.routeName, (route) => false);
-      //
+      return;
     }
+    _controller.nextPage(
+      duration: const Duration(milliseconds: 260),
+      curve: Curves.easeOut,
+    );
   }
+
+  void _skip() => Navigator.pushNamedAndRemoveUntil(
+      context, SignInScreen.routeName, (route) => false);
 
   @override
   Widget build(BuildContext context) {
+    final t = context.tl;
     return Scaffold(
-        body: SafeArea(
-      child: Padding(
-          padding: const EdgeInsets.all(16),
+      backgroundColor: t.bg,
+      body: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(24, 24, 24, 24),
           child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              _pageIndex < onboard_data.length -1 
-                  ? GestureDetector(
-                      onTap: () {
-                           Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                              builder: (context) => SignInScreen()),
-                        );
-                      },
-                      child: const Row(
-                        mainAxisAlignment: MainAxisAlignment.end,
-                        children: [
-                          Text(
-                            "Skip",
-                            style: TextStyle(
-                              color: kBlueColor,
-                              fontWeight: FontWeight.bold,
-                              fontSize: 20,
-                              letterSpacing: 2.0,
-                            ),
+              SizedBox(
+                height: 24,
+                child: Align(
+                  alignment: Alignment.centerRight,
+                  child: _isLast
+                      ? null
+                      : InkWell(
+                          onTap: _skip,
+                          child: Text(
+                            'Skip',
+                            style: TLText.cardTitle(TLTokens.primary)
+                                .copyWith(letterSpacing: 0.3),
                           ),
-                        ],
-                      ),
-                    )
-                  : Container(),
-              Expanded(
-                child: PageView.builder(
-                  controller: _pageController,
-                  onPageChanged: (index) {
-                    setState(() {
-                      _pageIndex = index;
-                    });
-                  },
-                  itemCount: onboard_data.length,
-                  itemBuilder: (context, index) => Onboard(
-                    image: onboard_data[index].image,
-                    title: onboard_data[index].title,
-                    description: onboard_data[index].description,
-                    pageIndex: _pageIndex,
-                  ),
+                        ),
                 ),
               ),
+              Expanded(
+                child: PageView.builder(
+                  controller: _controller,
+                  itemCount: onboard_data.length,
+                  onPageChanged: (i) => setState(() => _index = i),
+                  itemBuilder: (context, i) => Onboard(content: onboard_data[i]),
+                ),
+              ),
+              const SizedBox(height: 20),
               Row(
-                mainAxisAlignment: MainAxisAlignment.end,
+                mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  SizedBox(
-                    height: 50,
-                    width: 140,
-                    child: ElevatedButton(
-                      onPressed: _navigateToSignUpPage,
-                      child: Text(
-                        _pageIndex < onboard_data.length - 1
-                            ? "Next"
-                            : "Get Started",
-                        style: const TextStyle(
-                            fontSize: 17, fontWeight: FontWeight.w600),
-                      ),
-                    ),
-                  ),
+                  for (var i = 0; i < onboard_data.length; i++)
+                    DotIndicator(isActive: i == _index),
                 ],
-              )
+              ),
+              const SizedBox(height: 20),
+              TLButton(
+                label: _isLast ? 'Get Started' : 'Next',
+                onPressed: _next,
+              ),
             ],
-          )),
-    ));
+          ),
+        ),
+      ),
+    );
   }
 }
 
+/// One onboarding slide: illustration tile, then title and description.
 class Onboard extends StatelessWidget {
-  const Onboard({
-    super.key,
-    required this.image,
-    required this.title,
-    required this.description,
-    required this.pageIndex,
-  });
+  const Onboard({Key? key, required this.content}) : super(key: key);
 
-  final String image, title, description;
-  final int pageIndex;
+  final OnboardContent content;
 
   @override
   Widget build(BuildContext context) {
-    final int pageCount = onboard_data.length;
+    final t = context.tl;
     return Column(
+      mainAxisAlignment: MainAxisAlignment.center,
       children: [
-        const Padding(
-          padding: EdgeInsets.all(12.0),
+        Container(
+          width: 220,
+          height: 220,
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            color: t.cardAlt,
+            borderRadius: BorderRadius.circular(28),
+          ),
+          child: SvgPicture.asset(
+            content.image,
+            fit: BoxFit.contain,
+            semanticsLabel: content.title,
+          ),
         ),
-        const Spacer(),
-        SvgPicture.asset(
-          image,
-          height: 300,
-        ),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: List.generate(pageCount, (index) {
-            final isActive = index == pageIndex;
-            return Padding(
-              padding: const EdgeInsets.all(4.0),
-              child: DotIndicator(isActive: isActive),
-            );
-          }),
-        ),
-        const Spacer(),
+        const SizedBox(height: 28),
         Text(
-          title,
-          style: const TextStyle(
-              color: kBlueColor, fontSize: 28, fontWeight: FontWeight.bold),
-        ),
-        const SizedBox(
-          height: 10,
-        ),
-        Text(
-          description,
-          style: Theme.of(context).copyWith().textTheme.bodyLarge,
+          content.title,
           textAlign: TextAlign.center,
+          style: TLText.display(t.text),
         ),
-        const Spacer()
+        const SizedBox(height: 12),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 8),
+          child: Text(
+            content.description,
+            textAlign: TextAlign.center,
+            style: TLText.lead(t.textSub),
+          ),
+        ),
       ],
+    );
+  }
+}
+
+/// Progress dot — the active one stretches into a bar, as in the design.
+class DotIndicator extends StatelessWidget {
+  const DotIndicator({Key? key, this.isActive = false}) : super(key: key);
+
+  final bool isActive;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = context.tl;
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 200),
+      height: 8,
+      width: isActive ? 20 : 8,
+      margin: const EdgeInsets.symmetric(horizontal: 3),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(4),
+        color: isActive ? TLTokens.primary : t.border,
+      ),
     );
   }
 }

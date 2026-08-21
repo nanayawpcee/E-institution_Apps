@@ -1,226 +1,236 @@
 import 'package:chewie/chewie.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
-import 'package:tutorlinkelearning/Screens/CourseDetails/reviews.dart';
-import 'package:tutorlinkelearning/constants.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:video_player/video_player.dart';
-import '../../Backend/tutorcardlistbuild.dart';
 
-class CourseDetailScreen extends StatefulWidget {
+import '../../components/tutorcard.dart';
+import '../../providers/student_data.dart';
+import '../../services/local_auth_service.dart';
+import '../../theme/app_text.dart';
+import '../../theme/app_tokens.dart';
+import '../../theme/app_widgets.dart';
+import '../../utils/dateformat.dart';
+import '../../utils/image_helpers.dart';
+import 'reviews.dart';
+
+/// Course detail: preview video, metadata, description and the tutors who
+/// teach it.
+class CourseDetailScreen extends ConsumerStatefulWidget {
+  const CourseDetailScreen({Key? key, required this.courseId})
+      : super(key: key);
+
   final String courseId;
 
-  const CourseDetailScreen({required this.courseId});
-
   @override
-  State<CourseDetailScreen> createState() => _CourseDetailScreenState();
+  ConsumerState<CourseDetailScreen> createState() => _CourseDetailScreenState();
 }
 
-class _CourseDetailScreenState extends State<CourseDetailScreen> {
-  String? course = '';
-  String? imageUrl = '';
-  String? department = '';
-  String? description = '';
-  int ratings = 0;
-  bool _isVideoReady = false;
-  VideoPlayerController? _videoPlayerController;
+class _CourseDetailScreenState extends ConsumerState<CourseDetailScreen> {
+  VideoPlayerController? _videoController;
   ChewieController? _chewieController;
+  bool _videoReady = false;
 
   @override
   void initState() {
     super.initState();
-    getCoursesData();
-    initializeVideoPlayer();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _initVideo());
   }
 
-  void initializeVideoPlayer() async {
-    FirebaseFirestore.instance
-        .collection('Courses')
-        .doc(widget.courseId)
-        .get()
-        .then((courseSnapshot) async {
-      String courseVideoUrl = courseSnapshot['courseVid'];
+  Future<void> _initVideo() async {
+    final course =
+        ref.read(studentDataProvider.notifier).courseById(widget.courseId);
+    if (course == null || course.videoUrl.isEmpty) return;
 
-      _videoPlayerController = VideoPlayerController.network(courseVideoUrl);
+    _videoController =
+        VideoPlayerController.networkUrl(Uri.parse(course.videoUrl));
+    await _videoController!.initialize();
+    _chewieController = ChewieController(
+      videoPlayerController: _videoController!,
+      autoPlay: false,
+      looping: true,
+    );
 
-      await _videoPlayerController!.initialize();
-
-      _chewieController = ChewieController(
-        videoPlayerController: _videoPlayerController!,
-        autoPlay: true,
-        looping: true,
-      );
-
-      setState(() {
-        _isVideoReady = true;
-      });
-    });
+    if (!mounted) return;
+    setState(() => _videoReady = true);
   }
 
   @override
   void dispose() {
-    _videoPlayerController?.dispose();
+    _videoController?.dispose();
     _chewieController?.dispose();
     super.dispose();
   }
 
-  void getCoursesData() async {
-    final DocumentSnapshot userDoc = await FirebaseFirestore.instance
-        .collection('Courses')
-        .doc(widget.courseId)
-        .get();
+  @override
+  Widget build(BuildContext context) {
+    final t = context.tl;
+    final student = ref.watch(authProvider);
+    ref.watch(studentDataProvider);
+    final notifier = ref.read(studentDataProvider.notifier);
+    final course = notifier.courseById(widget.courseId);
 
-    // Check for null and update state
-    if (userDoc.exists) {
-      setState(() {
-        course = userDoc.get('courseName');
-        imageUrl = userDoc.get('courseIcon');
-        department = userDoc.get('department');
-        description = userDoc.get('courseInfo');
-        ratings = userDoc.get('ratings');
-      });
+    if (course == null) {
+      return Scaffold(
+        backgroundColor: t.bg,
+        appBar: AppBar(),
+        body: const TLEmptyState(
+          icon: Icons.search_off_rounded,
+          title: 'Course not found',
+        ),
+      );
     }
+
+    final bookmarked = student?.bookmarks.contains(course.courseId) ?? false;
+    final tutors = notifier.tutorsForCourse(course.courseId);
+
+    return Scaffold(
+      backgroundColor: t.bg,
+      body: SafeArea(
+        child: ListView(
+          padding: const EdgeInsets.fromLTRB(20, 12, 20, 32),
+          children: [
+            Row(
+              children: [
+                TLIconButton(
+                  icon: Icons.arrow_back_ios_new_rounded,
+                  onPressed: () => Navigator.pop(context),
+                ),
+                Expanded(
+                  child: Text(
+                    'Course Details',
+                    textAlign: TextAlign.center,
+                    style: TLText.cardTitle(TLTokens.primary),
+                  ),
+                ),
+                TLIconButton(
+                  icon: bookmarked
+                      ? Icons.bookmark_rounded
+                      : Icons.bookmark_border_rounded,
+                  iconColor: TLTokens.primary,
+                  onPressed: () => ref
+                      .read(authProvider.notifier)
+                      .toggleBookmark(course.courseId),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(TLTokens.rXl),
+              child: SizedBox(
+                height: 190,
+                child: _videoReady && _chewieController != null
+                    ? Chewie(controller: _chewieController!)
+                    : _CoverPlaceholder(imagePath: course.image),
+              ),
+            ),
+            const SizedBox(height: 16),
+            Text(course.name, style: TLText.sectionTitle(t.text)),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                TLRating(value: course.rating.toDouble(), size: 13),
+                const SizedBox(width: 14),
+                Text(
+                  formatDuration(course.duration),
+                  style: TLText.meta(t.textSub).copyWith(fontSize: 13),
+                ),
+                const SizedBox(width: 14),
+                Text(
+                  course.department,
+                  style: TLText.meta(t.textSub).copyWith(fontSize: 13),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Text(
+              course.details,
+              textAlign: TextAlign.justify,
+              style: TLText.sub(t.textSub).copyWith(height: 1.6),
+            ),
+            const SizedBox(height: 22),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.baseline,
+              textBaseline: TextBaseline.alphabetic,
+              children: [
+                Expanded(
+                  child: Text(
+                    'Tutors',
+                    style: TLText.sectionTitle(TLTokens.accent)
+                        .copyWith(fontSize: 16),
+                  ),
+                ),
+                InkWell(
+                  onTap: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) =>
+                          ReviewScreen(courseId: course.courseId),
+                    ),
+                  ),
+                  child: Text(
+                    'Reviews',
+                    style: TLText.sub(TLTokens.primary)
+                        .copyWith(fontWeight: FontWeight.w600),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            if (tutors.isEmpty)
+              const TLEmptyState(
+                icon: Icons.people_outline,
+                title: 'No tutors assigned yet',
+              )
+            else
+              for (final tutor in tutors)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 10),
+                  child: TutorCard(
+                    tutorId: tutor.id,
+                    courseId: course.courseId,
+                    imageUrl: tutor.userImage,
+                    tutorName: tutor.name,
+                    students: tutor.students.length,
+                    rating: tutor.rating,
+                    isOpen: tutor.available,
+                  ),
+                ),
+          ],
+        ),
+      ),
+    );
   }
+}
 
-  void addBookmark() async {
-    final studentId = FirebaseAuth.instance.currentUser!.uid;
-    final docRef =
-        FirebaseFirestore.instance.collection('Students').doc(studentId);
+/// Cover art with a play badge, shown until the preview video is ready.
+class _CoverPlaceholder extends StatelessWidget {
+  const _CoverPlaceholder({required this.imagePath});
 
-    DocumentSnapshot studentSnapshot = await docRef.get();
-    List<dynamic>? bookmarks = studentSnapshot['bookmarks'];
-
-    if (bookmarks == null) {
-      bookmarks = [widget.courseId];
-    } else {
-      if (!bookmarks.contains(widget.courseId)) {
-        bookmarks.add(widget.courseId);
-      }
-    }
-    await docRef.update({'bookmarks': bookmarks});
-
-    Navigator.pop(context);
-  }
+  final String imagePath;
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      body: SingleChildScrollView(
-        child: SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 20),
-            child: Column(
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    GestureDetector(
-                      onTap: () {
-                        Navigator.pop(context);
-                      },
-                      child: const Icon(
-                        Icons.arrow_back_ios_new_outlined,
-                        color: kBlackColor800,
-                        size: 30,
-                      ),
-                    ),
-                    const Text(
-                      'Course Details',
-                      style: TextStyle(color: kBlueColor, fontSize: 20),
-                    ),
-                    GestureDetector(
-                      onTap: () {
-                        addBookmark();
-                      },
-                      child: const Icon(
-                        Icons.bookmark_add_outlined,
-                        color: kBlueColor,
-                        size: 35,
-                      ),
-                    )
-                  ],
-                ),
-                const SizedBox(
-                  height: 14,
-                ),
-                Container(
-                  height: MediaQuery.of(context).size.height / 4.5,
-                  decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(8),
-                      color: kBlueColor),
-                  child: _isVideoReady
-                      ? Chewie(
-                          controller: _chewieController!,
-                        )
-                      : Center(child: CircularProgressIndicator()),
-                ),
-                const SizedBox(
-                  height: 20,
-                ),
-                Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        '${course!} Course',
-                        style: const TextStyle(
-                            fontSize: 20, fontWeight: FontWeight.w600),
-                        maxLines: 2,
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(
-                  height: 15,
-                ),
-                Text(
-                  description!,
-                  textAlign: TextAlign.justify,
-                  style: const TextStyle(letterSpacing: 0.5),
-                ),
-                const SizedBox(
-                  height: 10,
-                ),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.start,
-                  children: [
-                    const Text(
-                      'Tutors',
-                      style: TextStyle(
-                          color: kPrimaryColor,
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                          decoration: TextDecoration.underline),
-                    ),
-                    const SizedBox(
-                      width: 8,
-                    ),
-                    GestureDetector(
-                      onTap: () {
-                        Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                                builder: (context) =>
-                                    ReviewScreen(courseId: widget.courseId)));
-                      },
-                      child: const Text(
-                        'Reviews',
-                        style: TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.w500,
-                            color: kBlueColor),
-                      ),
-                    )
-                  ],
-                ),
-                const SizedBox(
-                  height: 10,
-                ),
-                tutorcardbuilder_coursedetails(widget: widget)
-              ],
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        Image(image: appImageProvider(imagePath), fit: BoxFit.cover),
+        ColoredBox(color: Colors.black.withValues(alpha: 0.18)),
+        Center(
+          child: Container(
+            width: 52,
+            height: 52,
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.9),
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(
+              Icons.play_arrow_rounded,
+              size: 28,
+              color: TLTokens.primary,
             ),
           ),
         ),
-      ),
+      ],
     );
   }
 }

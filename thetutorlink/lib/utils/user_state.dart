@@ -1,35 +1,18 @@
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
-import 'package:thetutorlink/Screens/Splash_Screen/splash.dart';
-import 'package:thetutorlink/components/home.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-class UserState extends StatefulWidget {
-  @override
-  State<UserState> createState() => _UserState();
-}
+import '../Components/home.dart';
+import '../Screens/Splash_Screen/splash.dart';
+import '../services/local_auth_service.dart';
 
-class _UserState extends State<UserState> {
+/// Keeps the tutor signed in across app restarts — the local stand-in for
+/// watching Firebase's authStateChanges().
+class UserState extends ConsumerWidget {
+  const UserState({Key? key}) : super(key: key);
+
   @override
-  Widget build(BuildContext context) {
-    return StreamBuilder<User?>(
-      stream: FirebaseAuth.instance.authStateChanges(),
-      builder: (ctx, userSnapshot) {
-        if (userSnapshot.data == null) {
-          return SplashScreen();
-        } else if (userSnapshot.hasData) {
-          return HomeScreenBuilder();
-        } else if (userSnapshot.hasError) {
-          return const Scaffold(
-            body: Center(
-              child: Text('Error Occured'),
-            ),
-          );
-        } else if (userSnapshot.connectionState == ConnectionState.waiting) {
-          return SplashScreen();
-        } else {
-          return SplashScreen();
-        }
-      },
-    );
+  Widget build(BuildContext context, WidgetRef ref) {
+    final tutor = ref.watch(authProvider);
+    return tutor == null ? const SplashScreen() : const HomeScreensBuilder();
   }
 }

@@ -1,65 +1,43 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../components/home.dart';
+import '../../services/local_auth_service.dart';
 
-class EmailVerificationScreen extends StatefulWidget {
+class EmailVerificationScreen extends ConsumerStatefulWidget {
   @override
-  _EmailVerificationScreenState createState() =>
+  ConsumerState<EmailVerificationScreen> createState() =>
       _EmailVerificationScreenState();
 }
 
-class _EmailVerificationScreenState extends State<EmailVerificationScreen> {
+class _EmailVerificationScreenState
+    extends ConsumerState<EmailVerificationScreen> {
   Timer? _timer;
   bool canResendEmail = false;
-  bool isEmailVerified = false;
 
+  // There is no mail backend locally, so the account counts as verified
+  // straight away and the screen just confirms before moving on.
   @override
   void initState() {
     super.initState();
-    isEmailVerified = FirebaseAuth.instance.currentUser!.emailVerified;
-    if (!isEmailVerified) {
-      sendVerificationEmail();
-      _timer = Timer.periodic(
-          const Duration(seconds: 3), (_) => checkEmailVerified());
-    }
-  }
-
-  Future<void> sendVerificationEmail() async {
-    try {
-      final user = FirebaseAuth.instance.currentUser!;
-      await user.sendEmailVerification();
-      setState(() => canResendEmail = false);
-      await Future.delayed(const Duration(seconds: 15));
-      setState(() => canResendEmail = true);
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Check email for verification')));
-    }
+    _timer = Timer(const Duration(seconds: 3), navigateToHomeScreen);
+    Future.delayed(const Duration(seconds: 15), () {
+      if (mounted) setState(() => canResendEmail = true);
+    });
   }
 
   @override
   void dispose() {
-    _timer?.cancel(); // Dispose the timer
+    _timer?.cancel();
     super.dispose();
   }
 
-// this is to check if email is verified before user can navigate to the homescreen
-  Future checkEmailVerified() async {
-    await FirebaseAuth.instance.currentUser!.reload();
-    setState(() {
-      isEmailVerified = FirebaseAuth.instance.currentUser!.emailVerified;
-    });
-    if (isEmailVerified) {
-      _timer?.cancel();
-      navigateToHomeScreen();
-    }
-  }
 //this method is to navigate to the HomeScreen while removing
 //the previous widget within the stack
   void navigateToHomeScreen() {
+    if (!mounted) return;
     Navigator.pushNamedAndRemoveUntil(
         context, HomeScreensBuilder.routeName, (route) => false);
   }
@@ -82,7 +60,14 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen> {
             ),
             const SizedBox(height: 24),
             ElevatedButton.icon(
-              onPressed: canResendEmail ? sendVerificationEmail : null,
+              onPressed: canResendEmail
+                  ? () {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                            content: Text('Check email for verification')),
+                      );
+                    }
+                  : null,
               icon: const Icon(Icons.email, size: 32),
               label: const Text(
                 'Resend Email',
@@ -101,8 +86,10 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen> {
                 'Logout',
                 style: TextStyle(fontSize: 24),
               ),
-              onPressed: () async{
-               await  FirebaseAuth.instance.signOut();// sign Out when user doesn't verify email
+              onPressed: () async {
+                _timer?.cancel();
+                await ref.read(authProvider.notifier).signOut();
+                if (!context.mounted) return;
                 Navigator.pop(context);
               },
             ),

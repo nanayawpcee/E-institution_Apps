@@ -1,187 +1,168 @@
-import 'package:firebase_storage/firebase_storage.dart';
-import 'package:flutter/material.dart';
-import 'package:thetutorlink/Components/booksview.dart';
-import 'package:thetutorlink/constants.dart';
+import 'dart:io';
 
-class Books extends StatefulWidget {
-  const Books({super.key});
+import 'package:file_picker/file_picker.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import '../../Components/booksview.dart';
+import '../../Components/home.dart';
+import '../../providers/tutor_data.dart';
+import '../../theme/app_text.dart';
+import '../../theme/app_tokens.dart';
+import '../../theme/app_widgets.dart';
+
+/// Books tab: the shared PDF library, searchable, with an add affordance for
+/// the tutor's own uploads.
+class Books extends ConsumerStatefulWidget {
+  const Books({Key? key}) : super(key: key);
 
   @override
-  State<Books> createState() => _BooksState();
+  ConsumerState<Books> createState() => _BooksState();
 }
 
-class _BooksState extends State<Books> {
-  final TextEditingController _booksearchController = TextEditingController();
-  final FirebaseStorage _storage = FirebaseStorage.instance;
-  List<Reference> _pdfFiles = [];
-  List<Reference> _filteredPdfFiles = []; // Filtered PDF files list
-
-  @override
-  void initState() {
-    super.initState();
-    fetchPDFFiles();
-  }
-
-  Future<void> fetchPDFFiles() async {
-    try {
-      final Reference booksFolder = _storage.ref().child('books');
-      final ListResult result = await booksFolder.listAll();
-
-      setState(() {
-        _pdfFiles = result.items;
-        _filteredPdfFiles = _pdfFiles;
-      });
-    } catch (error) {
-      print('Error fetching PDF files: $error');
-    }
-  }
-
-  void _openPdfViewer(Reference pdfReference, String pdfFileName) async {
-    try {
-      String pdfUrl = await pdfReference.getDownloadURL();
-      // ignore: use_build_context_synchronously
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (context) => PdfViewerScreen(pdfUrl, pdfFileName),
-        ),
-      );
-    } catch (error) {
-      print('Error getting PDF URL: $error');
-    }
-  }
-
-  void updateFilteredFiles(String searchText) {
-    setState(() {
-      if (searchText.isEmpty) {
-        _filteredPdfFiles = _pdfFiles;
-      } else {
-        _filteredPdfFiles = _pdfFiles.where((pdfFile) {
-          return pdfFile.name.toLowerCase().contains(searchText.toLowerCase());
-        }).toList();
-      }
-    });
-  }
+class _BooksState extends ConsumerState<Books> {
+  String _search = '';
 
   @override
   Widget build(BuildContext context) {
+    final t = context.tl;
+    final books = ref.watch(tutorDataProvider).bookFiles.where((b) {
+      return _search.isEmpty || b.name.toLowerCase().contains(_search);
+    }).toList();
+
     return GestureDetector(
       onTap: () => FocusManager.instance.primaryFocus?.unfocus(),
-      child: SingleChildScrollView(
-        child: SizedBox(
-          width: MediaQuery.of(context).size.width,
-          height: MediaQuery.of(context).size.height,
-          child: Scaffold(
-            body: SafeArea(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(vertical: 8),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.start,
-                  children: [
-                    const SizedBox(
-                      height: 40,
-                    ),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        SizedBox(
-                          width: MediaQuery.of(context).size.width - 30,
-                          child: TextField(
-                            controller: _booksearchController,
-                            cursorHeight: 18,
-                            keyboardType: TextInputType.text,
-                            decoration: InputDecoration(
-                              contentPadding:
-                                  const EdgeInsets.symmetric(horizontal: 20),
-                              suffixIcon: const Icon(
-                                Icons.search_outlined,
-                                color: kBlueColor,
-                              ),
-                              border: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(10)),
-                              hintText: 'Search Books to read',
-                            ),
-                            onChanged: updateFilteredFiles, // filtering here
-                          ),
-                        )
-                      ],
-                    ),
-                    const SizedBox(
-                      height: 20,
-                    ),
-                    const Row(
-                      children: [
-                        Padding(
-                          padding: EdgeInsets.symmetric(horizontal: 16),
-                          child: Text(
-                            'Read Books',
-                            style: TextStyle(
-                                fontSize: 20, fontWeight: FontWeight.w500),
-                          ),
-                        )
-                      ],
-                    ),
-                    const SizedBox(
-                      height: 10,
-                    ),
-                    Flexible(
-                      flex: 1,
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 8, vertical: 10),
-                        child: ListView.builder(
-                          itemCount: _filteredPdfFiles.length,
-                          itemBuilder: (context, index) {
-                            final pdfFile = _filteredPdfFiles[index];
-                            final pdfFileName = pdfFile.name;
-
-                            return Card(
-                              elevation: 4,
-                              color: kRedLightColor,
-                              margin: const EdgeInsets.all(16),
-                              child: Column(
-                                children: [
-                                  ListTile(
-                                    leading: const Icon(
-                                      Icons.file_present,
-                                      color: kRedColor,
-                                    ),
-                                    title: Text(
-                                      pdfFileName,
-                                      style: const TextStyle(
-                                          fontWeight: FontWeight.bold,
-                                          fontSize: 18,
-                                          color: kBlueColor),
-                                    ),
-                                  ),
-                                  Container(
-                                    width: MediaQuery.of(context).size.width,
-                                    decoration: const BoxDecoration(
-                                      color: kWhiteColor,
-                                    ),
-                                    child: TextButton(
-                                      onPressed: () {
-                                        _openPdfViewer(pdfFile, pdfFileName);
-                                      },
-                                      child: const Text(
-                                        'Read',
-                                        style: TextStyle(fontSize: 18),
-                                      ),
-                                    ),
-                                  )
-                                ],
-                              ),
-                            );
-                          },
-                        ),
+      child: SafeArea(
+        bottom: false,
+        child: ListView(
+          padding: const EdgeInsets.fromLTRB(20, 20, 20, kTabBottomInset),
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Text('Read Books', style: TLText.screenTitle(t.text)),
+                ),
+                TLIconButton(icon: Icons.add_rounded, onPressed: _addBook),
+              ],
+            ),
+            const SizedBox(height: 16),
+            TLSearchField(
+              hint: 'Search books to read',
+              onChanged: (v) => setState(() => _search = v.toLowerCase()),
+            ),
+            const SizedBox(height: 22),
+            Text('Library', style: TLText.cardTitle(t.text)),
+            const SizedBox(height: 12),
+            if (books.isEmpty)
+              TLEmptyState(
+                icon: Icons.menu_book_outlined,
+                title: _search.isEmpty ? 'No books yet' : 'No matching books',
+                message: _search.isEmpty
+                    ? 'Add a PDF with the button above.'
+                    : 'Try a different title.',
+              )
+            else
+              for (final book in books)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: _BookRow(
+                    title: book.name,
+                    onRead: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) =>
+                            PdfViewerScreen(book.url, book.name),
                       ),
                     ),
-                  ],
+                  ),
+                ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _addBook() async {
+    final picked = await FilePicker.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: const ['pdf'],
+      dialogTitle: 'Select a book',
+    );
+    if (!mounted) return;
+
+    if (picked.isEmpty) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('No file selected')));
+      return;
+    }
+
+    final file = picked.single;
+    final path = file.path;
+    if (path == null) return;
+
+    // Files stay as on-device paths; there is no Storage bucket to upload to.
+    ref.read(tutorDataProvider.notifier).addBookFile(file.name, File(path).path);
+    if (!mounted) return;
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text('${file.name} added')));
+  }
+}
+
+/// Library row: spine-shaped cover mark, title, and a Read affordance.
+class _BookRow extends StatelessWidget {
+  const _BookRow({required this.title, required this.onRead});
+
+  final String title;
+  final VoidCallback onRead;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = context.tl;
+    return TLCard(
+      onTap: onRead,
+      child: Row(
+        children: [
+          Container(
+            width: 44,
+            height: 56,
+            decoration: BoxDecoration(
+              color: TLTokens.primary,
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: const Icon(
+              Icons.menu_book_rounded,
+              size: 20,
+              color: Colors.white,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              title,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: TLText.cardTitle(t.text).copyWith(fontSize: 14),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Material(
+            color: t.cardAlt,
+            borderRadius: BorderRadius.circular(TLTokens.rMd),
+            child: InkWell(
+              onTap: onRead,
+              borderRadius: BorderRadius.circular(TLTokens.rMd),
+              child: Padding(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                child: Text(
+                  'Read',
+                  style: TLText.cardTitle(TLTokens.primary)
+                      .copyWith(fontSize: 13),
                 ),
               ),
             ),
           ),
-        ),
+        ],
       ),
     );
   }

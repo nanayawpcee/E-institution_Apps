@@ -1,237 +1,179 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
-import 'package:tutorlinkelearning/Screens/ClassRoom/coursematerialbucket.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../components/coursecard.dart';
-import '../../components/mycoursestatus.dart';
-import '../../constants.dart';
+import '../../components/home.dart';
+import '../../models/app_models.dart';
+import '../../providers/student_data.dart';
+import '../../services/local_auth_service.dart';
+import '../../theme/app_text.dart';
+import '../../theme/app_tokens.dart';
+import '../../theme/app_widgets.dart';
+import '../../utils/coursename.dart';
+import '../ClassRoom/coursematerialbucket.dart';
+import '../CourseDetails/reviews.dart';
 
-import '../../utils/coursename.dart'; // Import the provided CoursesType class
+enum _CourseStatus { all, active, pending, completed }
 
-class Mycourses extends StatefulWidget {
-  const Mycourses({super.key});
+/// My Courses tab: enrolment status filters over the student's own courses.
+class Mycourses extends ConsumerStatefulWidget {
+  const Mycourses({Key? key}) : super(key: key);
 
   @override
-  State<Mycourses> createState() => _MycoursesState();
+  ConsumerState<Mycourses> createState() => _MycoursesState();
 }
 
-class _MycoursesState extends State<Mycourses> {
-  int selectedIndex = 0;
-  final studentId = FirebaseAuth.instance.currentUser!.uid;
-  String searchQuery = '';
-
-  String statusFromIndex(int index) {
-    switch (index) {
-      case 0:
-        return 'All';
-      case 1:
-        return 'Active';
-      case 2:
-        return 'Pending';
-      case 3:
-        return 'Completed';
-      default:
-        return 'All';
-    }
-  }
+class _MycoursesState extends ConsumerState<Mycourses> {
+  _CourseStatus _status = _CourseStatus.all;
+  String _search = '';
 
   @override
   Widget build(BuildContext context) {
+    final t = context.tl;
+    final student = ref.watch(authProvider);
+    ref.watch(studentDataProvider);
+    final notifier = ref.read(studentDataProvider.notifier);
+
+    final courses = student == null
+        ? <CoursesType>[]
+        : notifier
+            .coursesByIds(_idsFor(student))
+            .where((c) =>
+                c.name.toLowerCase().contains(_search.toLowerCase()))
+            .toList();
+
     return GestureDetector(
       onTap: () => FocusManager.instance.primaryFocus?.unfocus(),
-      child: SingleChildScrollView(
-        child: Container(
-          height: MediaQuery.of(context).size.height,
-          width: MediaQuery.of(context).size.width,
-          child: Scaffold(
-            body: SafeArea(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(vertical: 8),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.start,
-                  children: [
-                    const SizedBox(
-                      height: 40,
-                    ),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        SizedBox(
-                          width: MediaQuery.of(context).size.width - 30,
-                          child: TextField(
-                            cursorHeight: 24,
-                            keyboardType: TextInputType.text,
-                            onChanged: (value) {
-                              setState(() {
-                                searchQuery = value; // Update the search query
-                              });
-                            },
-                            decoration: InputDecoration(
-                              contentPadding:
-                                  const EdgeInsets.symmetric(horizontal: 20),
-                              suffixIcon: const Icon(
-                                Icons.search_outlined,
-                                color: kBlueColor,
-                              ),
-                              border: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(10)),
-                              hintText: 'Search any course',
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(
-                      height: 20,
-                    ),
-                    const Row(
-                      mainAxisAlignment: MainAxisAlignment.start,
-                      children: [
-                        Padding(
-                          padding: EdgeInsets.symmetric(horizontal: 10),
-                          child: Text(
-                            'My Courses',
-                            style: TextStyle(
-                              fontSize: 24,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                        )
-                      ],
-                    ),
-                    const SizedBox(
-                      height: 10,
-                    ),
-                    Expanded(
-                      flex: -1,
-                      child: Container(
-                        child: Row(
-                          children: [
-                            CourseStatusList(
-                              selectedIndex: selectedIndex,
-                              onChanged: (index) {
-                                setState(() {
-                                  selectedIndex = index;
-                                });
-                              },
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                    StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-                      stream: _getCoursesStream(selectedIndex),
-                      builder: (context, snapshot) {
-                        if (snapshot.connectionState ==
-                            ConnectionState.waiting) {
-                          return CircularProgressIndicator();
-                        } else if (snapshot.hasError) {
-                          return Text('Error: ${snapshot.error}');
-                        } else {
-                          final courses = snapshot.data!.docs;
-                          if (courses.isEmpty) {
-                            return const Center(
-                              child: Text(
-                                'No courses found for the selected status.',
-                              ),
-                            );
-                          } else {
-                            final filteredCourses =
-                                courses.where((courseSnapshot) {
-                              final courseData = courseSnapshot.data();
-                              // ignore: unnecessary_null_comparison
-                              if (courseData != null) {
-                                final course = CoursesType.fromMap(courseData);
-                                final courseName = course.name.toLowerCase();
-                                return courseName
-                                    .contains(searchQuery.toLowerCase());
-                              } else {
-                                return false;
-                              }
-                            }).toList();
-                            return Expanded(
-                              child: Padding(
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: 10, vertical: 10),
-                                child: ListView.builder(
-                                  itemCount: filteredCourses.length,
-                                  itemBuilder: (context, index) {
-                                    final courseSnapshot = filteredCourses[index];
-                                    final courseData = courseSnapshot.data();
-                                    // ignore: unnecessary_null_comparison
-                                    if (courseData != null) {
-                                      final course =
-                                          CoursesType.fromMap(courseData);
-                                      final courseId = courseSnapshot.id;
-                                      final bool isStatusActive =
-                                          statusFromIndex(selectedIndex) ==
-                                              'Active';
-
-                                      return MyCourseCard(
-                                        course: course,
-                                        isActive: isStatusActive,
-                                        onTap: isStatusActive
-                                            ? () {
-                                                Navigator.push(
-                                                  context,
-                                                  MaterialPageRoute(
-                                                    builder: (context) =>
-                                                        CourseMaterialPage(
-                                                      courseId: courseId,
-                                                      studentId: studentId,
-                                                    ),
-                                                  ),
-                                                );
-                                              }
-                                            : null,
-                                      );
-                                    } else {
-                                      return Container();
-                                    }
-                                  },
-                                ),
-                              ),
-                            );
-                          }
-                        }
-                      },
-                    ),
-                  ],
-                ),
-              ),
+      child: SafeArea(
+        bottom: false,
+        child: ListView(
+          padding: const EdgeInsets.fromLTRB(20, 20, 20, kTabBottomInset),
+          children: [
+            Text('My Courses', style: TLText.screenTitle(t.text)),
+            const SizedBox(height: 16),
+            TLSearchField(
+              hint: 'Search any course',
+              onChanged: (v) => setState(() => _search = v),
             ),
-          ),
+            const SizedBox(height: 16),
+            TLChipBar(
+              children: [
+                for (final status in _CourseStatus.values)
+                  TLChip(
+                    label: _label(status),
+                    selected: _status == status,
+                    onTap: () => setState(() => _status = status),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            if (courses.isEmpty)
+              const TLEmptyState(
+                icon: Icons.school_outlined,
+                title: 'No courses here yet',
+                message: 'No courses found for this status.',
+              )
+            else
+              for (final course in courses)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 14),
+                  child: _card(student!, course),
+                ),
+          ],
         ),
       ),
     );
   }
 
-  Stream<QuerySnapshot<Map<String, dynamic>>> _getCoursesStream(
-    int selectedIndex,
-  ) {
-    final collectionRef = FirebaseFirestore.instance.collection('Courses');
-    final studentRef =
-        FirebaseFirestore.instance.collection('Students').doc(studentId);
+  List<String> _idsFor(Student student) {
+    switch (_status) {
+      case _CourseStatus.active:
+        return student.activeCourses;
+      case _CourseStatus.pending:
+        return student.pendingCourses;
+      case _CourseStatus.completed:
+        return student.completedCourses;
+      case _CourseStatus.all:
+        return student.allCourses;
+    }
+  }
 
-    return studentRef.snapshots().asyncMap<QuerySnapshot<Map<String, dynamic>>>(
-      (studentSnapshot) async {
-        final List<dynamic>? courseIds = studentSnapshot
-            .get(statusFromIndex(selectedIndex)) as List<dynamic>?;
+  String _label(_CourseStatus status) {
+    switch (status) {
+      case _CourseStatus.all:
+        return 'All';
+      case _CourseStatus.active:
+        return 'Active';
+      case _CourseStatus.pending:
+        return 'Pending';
+      case _CourseStatus.completed:
+        return 'Completed';
+    }
+  }
 
-        final List<String> validCourseIds =
-            courseIds?.whereType<String>().toList() ?? [];
+  Widget _card(Student student, CoursesType course) {
+    final isActive = student.activeCourses.contains(course.courseId);
+    final isPending = student.pendingCourses.contains(course.courseId);
+    final isCompleted = student.completedCourses.contains(course.courseId);
 
-        if (validCourseIds.isEmpty) {
-          return collectionRef
-              .where(FieldPath.documentId, isEqualTo: 'no_id')
-              .get();
-        }
+    final alreadyReviewed = ref
+        .read(studentDataProvider.notifier)
+        .reviewsForCourse(course.courseId)
+        .any((r) => r.postedBy == student.name);
 
-        return collectionRef
-            .where(FieldPath.documentId, whereIn: validCourseIds)
-            .get();
-      },
+    return EnrolledCourseCard(
+      course: course,
+      statusLabel: isActive
+          ? 'Active'
+          : isPending
+              ? 'Pending approval'
+              : 'Completed',
+      statusColor: isActive
+          ? TLTokens.primary
+          : isPending
+              ? TLTokens.pendingInk
+              : TLTokens.success,
+      statusBackground: isActive
+          ? TLTokens.activeTint
+          : isPending
+              ? TLTokens.pendingTint
+              : TLTokens.completedTint,
+      // The design shows progress only while a course is running.
+      progress: isActive ? _progressFor(student, course) : null,
+      rateLabel:
+          isCompleted && !alreadyReviewed ? 'Rate your tutor →' : null,
+      onRate: () => Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => ReviewScreen(courseId: course.courseId),
+        ),
+      ),
+      onTap: isActive
+          ? () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => CourseMaterialPage(
+                    courseId: course.courseId,
+                    studentId: student.id,
+                  ),
+                ),
+              )
+          : () => openCourseDetail(context, course.courseId),
     );
+  }
+
+  /// Share of the classroom's scheduled span that has already elapsed — the
+  /// only progress signal the local data model carries.
+  double _progressFor(Student student, CoursesType course) {
+    final classroom = ref
+        .read(studentDataProvider.notifier)
+        .classroomFor(course.courseId, student.id);
+    if (classroom == null) return 0;
+
+    final total = classroom.endTime.difference(classroom.startTime).inMinutes;
+    if (total <= 0) return 0;
+    final elapsed =
+        DateTime.now().difference(classroom.startTime).inMinutes;
+    return (elapsed / total).clamp(0.0, 1.0);
   }
 }

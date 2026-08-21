@@ -1,93 +1,93 @@
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
-import 'package:thetutorlink/Screens/ClassRoom/coursematerialbucket.dart';
-import 'package:thetutorlink/constants.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-class StudentsCard extends StatefulWidget {
-  @override
-  State<StudentsCard> createState() => _StudentsCardState();
-  final String name;
-  final String studentId;
-  final String userImage;
-  final String age;
+import '../Screens/ClassRoom/coursematerialbucket.dart';
+import '../Screens/Profile/userProfileScreen.dart' show TLAvatar;
+import '../services/local_auth_service.dart';
+import '../theme/app_text.dart';
+import '../theme/app_tokens.dart';
+import '../theme/app_widgets.dart';
 
+/// Student row: portrait, name, the course they're taking and their progress.
+/// Tapping opens that student's classroom.
+class StudentsCard extends ConsumerWidget {
   const StudentsCard({
+    Key? key,
     required this.studentId,
     required this.userImage,
     required this.name,
-    required this.age,
-  });
-}
+    required this.courseLabel,
+    this.progress,
+  }) : super(key: key);
 
-class _StudentsCardState extends State<StudentsCard> {
-  final String tutorId = FirebaseAuth.instance.currentUser!.uid;
+  final String studentId;
+  final String userImage;
+  final String name;
+  final String courseLabel;
+
+  /// 0..1, or null when there is no active class to measure.
+  final double? progress;
 
   @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: () {
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (context) => CourseMaterialPage(
-              tutorId: tutorId,
-              studentId: widget.studentId,
+  Widget build(BuildContext context, WidgetRef ref) {
+    final t = context.tl;
+    final tutorId = ref.watch(authProvider)?.id ?? '';
+
+    return TLCard(
+      padding: const EdgeInsets.all(12),
+      onTap: () => Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => CourseMaterialPage(
+            tutorId: tutorId,
+            studentId: studentId,
+          ),
+        ),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          ClipRRect(
+            borderRadius: BorderRadius.circular(TLTokens.rLg),
+            child: SizedBox(
+              width: 60,
+              height: 60,
+              child: TLAvatar(imagePath: userImage, size: 60),
             ),
           ),
-        );
-      },
-      child: Card(
-          elevation: 4,
-          child: Padding(
-            padding: EdgeInsets.all(8),
-            child: Container(
-              color: Colors.transparent,
-              height: 83,
-              width: MediaQuery.of(context).size.width - 32,
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Hero(
-                    tag: 'userImage_${widget.studentId}',
-                    child: Material(
-                      type: MaterialType.transparency,
-                      child: Container(
-                        width: 75,
-                        decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(8),
-                            color: kBlueColor,
-                            image: DecorationImage(
-                                image: NetworkImage(widget.userImage),
-                                fit: BoxFit.fill)),
-                      ),
-                    ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TLText.cardTitle(t.text),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  courseLabel,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TLText.meta(t.textSub),
+                ),
+                if (progress != null) ...[
+                  const SizedBox(height: 8),
+                  TLProgressBar(value: progress!),
+                  const SizedBox(height: 3),
+                  Text(
+                    '${(progress! * 100).round()}% of class elapsed',
+                    style: TLText.tag(t.textSub)
+                        .copyWith(fontWeight: FontWeight.w400),
                   ),
-                  const SizedBox(
-                    width: 16,
-                  ),
-                  Flexible(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Hero(
-                          tag: 'name_${widget.studentId}',
-                          child: Material(
-                            color: Colors.transparent,
-                            child: Text(
-                              widget.name,
-                              overflow: TextOverflow.ellipsis,
-                              maxLines: 2,
-                              style: Theme.of(context).textTheme.titleLarge,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  )
                 ],
-              ),
+              ],
             ),
-          )),
+          ),
+        ],
+      ),
     );
   }
 }

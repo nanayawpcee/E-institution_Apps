@@ -1,228 +1,288 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
-import 'package:tutorlinkelearning/components/coursecard.dart';
-import '../../constants.dart';
-import '../../utils/persistent.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 
-class Allcourses extends StatefulWidget {
+import '../../components/coursecard.dart';
+import '../../components/home.dart';
+import '../../providers/student_data.dart';
+import '../../services/local_auth_service.dart';
+import '../../theme/app_assets.dart';
+import '../../theme/app_text.dart';
+import '../../theme/app_tokens.dart';
+import '../../theme/app_widgets.dart';
+import '../../utils/coursename.dart';
+
+enum _Sort { rating, duration, newest }
+
+/// Explore tab: the whole catalogue, filterable by department and sortable,
+/// with an optional "new this week" narrowing arrived at from the Home banner.
+class Allcourses extends ConsumerStatefulWidget {
   static String routeName = 'Allcourses';
+
+  const Allcourses({Key? key, required this.showNewCourses}) : super(key: key);
+
+  /// Opens pre-filtered to courses published in the last week.
   final bool showNewCourses;
 
-  Allcourses({required this.showNewCourses});
-
   @override
-  State<Allcourses> createState() => _AllcoursesState();
+  ConsumerState<Allcourses> createState() => _AllcoursesState();
 }
 
-class _AllcoursesState extends State<Allcourses> {
-  String? departmentFilter;
-  String? searchQuery;
-  bool isSearchOpen = false;
+class _AllcoursesState extends ConsumerState<Allcourses> {
+  static const List<String> _departments = [
+    'All',
+    'Computer Science',
+    'Mathematics',
+    'Biology',
+    'UI/UX',
+    'Physics',
+    'Design',
+  ];
 
-  _showDepartmentDialog({required Size size}) {
-    showDialog(
-      context: context,
-      builder: (ctx) {
-        return AlertDialog(
-          backgroundColor: kGreyColor600,
-          title: const Text(
-            'DEPARTMENTS',
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              fontSize: 20,
-              color: kPrimaryColor,
-            ),
-          ),
-          content: SizedBox(
-            width: size.width * 0.9,
-            child: ListView.builder(
-              shrinkWrap: true,
-              itemCount: Persistent.departmentList.length,
-              itemBuilder: (ctx, index) {
-                return InkWell(
-                  onTap: () {
-                    setState(() {
-                      departmentFilter = Persistent.departmentList[index];
-                    });
-                    Navigator.canPop(context) ? Navigator.pop(context) : null;
-                  },
-                  child: Row(
-                    children: [
-                      const Icon(
-                        Icons.arrow_right_alt_outlined,
-                        color: kGreyColor700,
-                      ),
-                      Padding(
-                        padding: const EdgeInsets.all(8),
-                        child: Text(
-                          Persistent.departmentList[index],
-                          style: const TextStyle(
-                            color: kBlueColor,
-                            fontSize: 16,
-                          ),
-                        ),
-                      )
-                    ],
-                  ),
-                );
-              },
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () {
-                Navigator.canPop(context) ? Navigator.pop(context) : null;
-              },
-              child: const Text(
-                'Close',
-                style: TextStyle(
-                  color: kBlackColor900,
-                  fontSize: 16,
-                ),
-              ),
-            ),
-            TextButton(
-              onPressed: () {
-                setState(() {
-                  departmentFilter = null;
-                  searchQuery = ''; // Reset search query
-                });
-                Navigator.canPop(context) ? Navigator.pop(context) : null;
-              },
-              child: const Text(
-                'Cancel Filter',
-                style: TextStyle(color: kBlackColor800),
-              ),
-            ),
-          ],
-        );
-      },
-    );
-  }
+  String _search = '';
+  String _department = 'All';
+  _Sort _sort = _Sort.rating;
+  late bool _newOnly = widget.showNewCourses;
 
   @override
   Widget build(BuildContext context) {
-    Size size = MediaQuery.of(context).size;
-    return Container(
-      decoration: const BoxDecoration(
-        color: kWhiteColor,
-      ),
-      child: Scaffold(
-        appBar: AppBar(
-          flexibleSpace: Container(
-            decoration: const BoxDecoration(
-              color: kBlueColor,
-            ),
+    final t = context.tl;
+    final student = ref.watch(authProvider);
+    final data = ref.watch(studentDataProvider);
+
+    final courses = _visible(data.courses);
+
+    // Reached from the Home banner as a pushed route, so it needs its own
+    // Scaffold; as a tab it simply fills the shell's body.
+    final body = GestureDetector(
+      onTap: () => FocusManager.instance.primaryFocus?.unfocus(),
+      child: SafeArea(
+        bottom: false,
+        child: ListView(
+          padding: EdgeInsets.fromLTRB(
+            20,
+            20,
+            20,
+            widget.showNewCourses ? 24 : kTabBottomInset,
           ),
-          title: isSearchOpen
-              ? TextField(
-                  onChanged: (value) {
-                    setState(() {
-                      searchQuery = value;
-                    });
-                  },
-                  onSubmitted: (_) {
-                    setState(() {
-                      isSearchOpen = false;
-                    });
-                  },
-                  decoration: const InputDecoration(
-                    hintText: 'Search for a course...',
-                    border: InputBorder.none,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Text('Explore', style: TLText.screenTitle(t.text)),
+                ),
+                _FilterButton(onTap: _openDepartmentSheet),
+              ],
+            ),
+            const SizedBox(height: 14),
+            TLSearchField(
+              hint: 'Search for a course...',
+              onChanged: (v) => setState(() => _search = v),
+            ),
+            const SizedBox(height: 14),
+            TLChipBar(
+              children: [
+                for (final sort in _Sort.values)
+                  TLChip(
+                    label: _sortLabel(sort),
+                    selected: _sort == sort,
+                    compact: true,
+                    color: TLTokens.accent,
+                    onTap: () => setState(() => _sort = sort),
                   ),
-                )
-              : const Text('Find A Course here'),
-          leading: IconButton(
-            icon: const Icon(Icons.filter_list_rounded),
-            onPressed: () {
-              _showDepartmentDialog(size: size);
-            },
-          ),
-          actions: [
-            IconButton(
-              onPressed: () {
-                setState(() {
-                  isSearchOpen = !isSearchOpen;// show the seach field for user to enter search value
-                  searchQuery = null;
-                });
-              },
-              icon: const Icon(
-                Icons.search_outlined,
-                color: kBlackColor800,
-              ),
+              ],
             ),
+            if (_newOnly) ...[
+              const SizedBox(height: 12),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: _NewOnlyChip(
+                  onClear: () => setState(() => _newOnly = false),
+                ),
+              ),
+            ],
+            if (_department != 'All') ...[
+              const SizedBox(height: 12),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  'Department: $_department',
+                  style: TLText.meta(t.textSub),
+                ),
+              ),
+            ],
+            const SizedBox(height: 16),
+            if (courses.isEmpty)
+              const TLEmptyState(
+                icon: Icons.explore_outlined,
+                title: 'Nothing to show',
+                message: 'Try clearing a filter or searching for something else.',
+              )
+            else
+              for (final course in courses)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 14),
+                  child: CourseCoverCard(
+                    course: course,
+                    bookmarked:
+                        student?.bookmarks.contains(course.courseId) ?? false,
+                    onToggleBookmark: () => _toggleBookmark(course),
+                  ),
+                ),
           ],
         ),
-        body: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-          stream: FirebaseFirestore.instance
-              .collection('Courses')
-              .where('department', isEqualTo: departmentFilter)
-              .snapshots(),
-          builder: (context, snapshot) {
-            if (snapshot.connectionState == ConnectionState.waiting) {
-              return const Center(child: CircularProgressIndicator());
-            } else if (snapshot.connectionState == ConnectionState.active) {
-              if (snapshot.hasData && snapshot.data!.docs.isNotEmpty) {
-                final now = DateTime.now();
-                final List<QueryDocumentSnapshot<Map<String, dynamic>>>
-                    courseDocs = snapshot.data!.docs.where((doc) {
-                  if (widget.showNewCourses) {
-                    final createdAtTimestamp =
-                        doc.get('createdAt') as Timestamp;
-                    final createdAt = createdAtTimestamp.toDate();
-                    final difference = now.difference(createdAt);
-                    return difference.inDays <= 7 &&
-                        (searchQuery == null ||
-                            doc
-                                .get('courseName')
-                                .toLowerCase()
-                                .contains(searchQuery!.toLowerCase()));
-                  } else {
-                    return searchQuery == null ||
-                        doc
-                            .get('courseName')
-                            .toLowerCase()
-                            .contains(searchQuery!.toLowerCase());
-                  }
-                }).toList();
+      ),
+    );
 
-                return ListView.builder(
-                  itemCount: courseDocs.length,
-                  itemBuilder: (BuildContext context, int index) {
-                    final doc = courseDocs[index];
-                    final courseId = doc.get('courseId');
-                    final courseIcon = doc.get('courseIcon');
-                    final course = doc.get('courseName');
-                    final description = doc.get('courseInfo');
-                    final duration = doc.get('duration');
-                    final rating = doc.get('ratings');
-                    final department = doc.get('department');
+    if (!widget.showNewCourses) return body;
+    return Scaffold(backgroundColor: t.bg, body: body);
+  }
 
-                    return CoursesCard(
-                      courseId: courseId,
-                      courseIcon: courseIcon,
-                      course: course,
-                      duration: duration,
-                      description: description,
-                      rating: rating,
-                      department: department,
-                    );
-                  },
-                );
-              } else {
-                return const Center(
-                  child: Text('There are no Courses'),
-                );
-              }
-            }
+  List<CoursesType> _visible(List<CoursesType> all) {
+    final courses = all.where((course) {
+      final matchesDept =
+          _department == 'All' || course.department == _department;
+      final matchesSearch = _search.isEmpty ||
+          course.name.toLowerCase().contains(_search.toLowerCase());
+      final matchesNew = !_newOnly ||
+          DateTime.now().difference(course.createdAt).inDays <= 7;
+      return matchesDept && matchesSearch && matchesNew;
+    }).toList();
 
-            return const Center(
-              child: Text(
-                'Something went wrong',
-                style: TextStyle(fontSize: 30, fontWeight: FontWeight.bold),
+    switch (_sort) {
+      case _Sort.rating:
+        courses.sort((a, b) => b.rating.compareTo(a.rating));
+      case _Sort.duration:
+        courses.sort((a, b) => a.duration.compareTo(b.duration));
+      case _Sort.newest:
+        courses.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+    }
+    return courses;
+  }
+
+  String _sortLabel(_Sort sort) {
+    switch (sort) {
+      case _Sort.rating:
+        return 'Top rated';
+      case _Sort.duration:
+        return 'Shortest';
+      case _Sort.newest:
+        return 'Newest';
+    }
+  }
+
+  void _toggleBookmark(CoursesType course) {
+    final wasBookmarked =
+        ref.read(authProvider)?.bookmarks.contains(course.courseId) ?? false;
+    ref.read(authProvider.notifier).toggleBookmark(course.courseId);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          wasBookmarked ? 'Removed from bookmarks' : 'Added to bookmarks',
+        ),
+      ),
+    );
+  }
+
+  Future<void> _openDepartmentSheet() async {
+    final t = context.tl;
+    await showTLSheet<void>(
+      context: context,
+      builder: (context) => Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text('Department', style: TLText.cardTitle(t.text)),
+          const SizedBox(height: 6),
+          for (final dept in _departments)
+            InkWell(
+              onTap: () {
+                setState(() => _department = dept);
+                Navigator.pop(context);
+              },
+              child: Container(
+                padding: const EdgeInsets.symmetric(vertical: 13, horizontal: 4),
+                decoration: BoxDecoration(
+                  border: Border(bottom: BorderSide(color: t.border)),
+                ),
+                child: Text(
+                  dept,
+                  style: TLText.body(
+                    _department == dept ? TLTokens.primary : t.text,
+                  ).copyWith(
+                    fontWeight:
+                        _department == dept ? FontWeight.w700 : FontWeight.w400,
+                  ),
+                ),
               ),
-            );
-          },
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Department filter affordance, using the bundled filter mark.
+class _FilterButton extends StatelessWidget {
+  const _FilterButton({required this.onTap});
+
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = context.tl;
+    return Material(
+      color: t.cardAlt,
+      borderRadius: BorderRadius.circular(TLTokens.rMd),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(TLTokens.rMd),
+        child: SizedBox(
+          width: 38,
+          height: 38,
+          child: Center(
+            child: SvgPicture.asset(
+              TLAssets.iconFilter,
+              width: 18,
+              height: 18,
+              colorFilter: ColorFilter.mode(t.text, BlendMode.srcIn),
+              semanticsLabel: 'Filter by department',
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Dismissible marker showing the "new this week" narrowing is active.
+class _NewOnlyChip extends StatelessWidget {
+  const _NewOnlyChip({required this.onClear});
+
+  final VoidCallback onClear;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: const Color(0xFFF1E6FF),
+      borderRadius: BorderRadius.circular(20),
+      child: InkWell(
+        onTap: onClear,
+        borderRadius: BorderRadius.circular(20),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                'New this week',
+                style: TLText.meta(TLTokens.accent)
+                    .copyWith(fontWeight: FontWeight.w700),
+              ),
+              const SizedBox(width: 6),
+              const Icon(Icons.close_rounded, size: 13, color: TLTokens.accent),
+            ],
+          ),
         ),
       ),
     );

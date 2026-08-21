@@ -1,240 +1,177 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_rating_bar/flutter_rating_bar.dart';
-import 'package:tutorlinkelearning/Screens/ClassRoom/assignment.dart';
-import 'package:tutorlinkelearning/Screens/ClassRoom/resourse.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:intl/intl.dart';
 
-import 'package:tutorlinkelearning/Screens/ClassRoom/settingspage.dart';
-import 'package:tutorlinkelearning/constants.dart';
+import '../../providers/student_data.dart';
+import '../../services/local_auth_service.dart';
+import '../../theme/app_text.dart';
+import '../../theme/app_tokens.dart';
+import '../../theme/app_widgets.dart';
+import 'assignment.dart';
+import 'resourse.dart';
+import 'settingspage.dart';
 
-class CourseMaterialPage extends StatefulWidget {
+enum _ClassroomTab { resources, assignments, settings }
+
+/// The classroom for one course: resources, assignment submissions and class
+/// settings, switched by the design's chip tabs rather than a drawer.
+class CourseMaterialPage extends ConsumerStatefulWidget {
+  const CourseMaterialPage({
+    Key? key,
+    required this.courseId,
+    required this.studentId,
+  }) : super(key: key);
+
   final String courseId;
   final String studentId;
 
-  const CourseMaterialPage(
-      {required this.courseId, required String this.studentId});
   @override
-  _CourseMaterialPageState createState() => _CourseMaterialPageState();
+  ConsumerState<CourseMaterialPage> createState() => _CourseMaterialPageState();
 }
 
-class _CourseMaterialPageState extends State<CourseMaterialPage> {
-  final PageController _pageController = PageController();
-  List<Widget> _pages = [];
-
-  int _currentPageIndex = 0;
+class _CourseMaterialPageState extends ConsumerState<CourseMaterialPage> {
+  _ClassroomTab _tab = _ClassroomTab.resources;
 
   @override
   void initState() {
     super.initState();
-    fetchClassroomData();
-    _pages = [
-      ResourcePage(
-        studentId: widget.studentId,
-        courseId: widget.courseId,
-      ),
-      AssignmentsPage(courseId: widget.courseId),
-      SettingsPage(),
-    ];
-  }
-
-  void _onMenuItemTap(int index) {
-    setState(() {
-      _currentPageIndex = index;
-      _pageController.jumpToPage(index);
-    });
-    Navigator.pop(context);
+    WidgetsBinding.instance
+        .addPostFrameCallback((_) => _promptForReviewIfClassEnded());
   }
 
   @override
   Widget build(BuildContext context) {
+    final t = context.tl;
+    final course =
+        ref.watch(studentDataProvider.notifier).courseById(widget.courseId);
+
     return Scaffold(
-      body: PageView(
-        controller: _pageController,
-        children: _pages,
-        onPageChanged: (index) {
-          setState(() {
-            _currentPageIndex = index;
-          });
-        },
-      ),
-      drawer: Drawer(
-        backgroundColor: kBlueColor,
-        child: ListView(
-          padding: EdgeInsets.zero,
-          children: <Widget>[
-            const DrawerHeader(
-              child: Text(
-                'Classroom',
-                style: TextStyle(fontSize: 30, color: kYellowColor),
-              ),
-              decoration: BoxDecoration(
-                color: kGreyColor800,
-                image: DecorationImage(
-                    fit: BoxFit.fill,
-                    image: AssetImage('assets/images/class.png')),
-              ),
+      backgroundColor: t.bg,
+      appBar: AppBar(title: Text(course?.name ?? 'Classroom')),
+      body: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 4, 20, 16),
+            child: TLChipBar(
+              children: [
+                for (final tab in _ClassroomTab.values)
+                  TLChip(
+                    label: _label(tab),
+                    selected: _tab == tab,
+                    onTap: () => setState(() => _tab = tab),
+                  ),
+              ],
             ),
-            ListTile(
-              leading: const Icon(
-                Icons.book,
-                color: kGreyColor500,
-              ),
-              title: const Text('Resources',
-                  style: TextStyle(color: kWhiteColor, fontSize: 18)),
-              selected: _currentPageIndex == 0,
-              onTap: () => _onMenuItemTap(0),
-            ),
-            ListTile(
-              leading: const Icon(
-                Icons.assignment_add,
-                color: kGreyColor500,
-              ),
-              title: const Text(
-                'Assignments',
-                style: TextStyle(color: kWhiteColor, fontSize: 18),
-              ),
-              selected: _currentPageIndex == 1,
-              onTap: () => _onMenuItemTap(1),
-            ),
-            ListTile(
-              leading: const Icon(
-                Icons.settings,
-                color: kGreyColor500,
-              ),
-              title: const Text('Settings Page',
-                  style: TextStyle(color: kWhiteColor, fontSize: 18)),
-              selected: _currentPageIndex == 2,
-              onTap: () => _onMenuItemTap(2),
-            ),
-          ],
-        ),
+          ),
+          Expanded(child: _body()),
+        ],
       ),
     );
   }
 
-// Assuming you have currentUser and widget.courseId defined somewhere.
-
-  Future<void> fetchClassroomData() async {
-    try {
-      QuerySnapshot classroomSnapshot = await FirebaseFirestore.instance
-          .collection('Classroom')
-          .where('studentId', isEqualTo: widget.studentId)
-          .where('courseId', isEqualTo: widget.courseId)
-          .get();
-
-      if (classroomSnapshot.docs.isNotEmpty) {
-        DocumentSnapshot classroomDocument = classroomSnapshot.docs.first;
-
-        String classroomId = classroomDocument.id;
-        String tutorId = classroomDocument.get('tutorId');
-        Timestamp endTime = classroomDocument.get('Endtime');
-
-        if (endTime.toDate().isBefore(DateTime.now())) {
-          // Class has ended, show a dialog with review and rating fields.
-          String review = '';
-          double rating = 0.0;
-
-          if (widget.studentId.isNotEmpty) {
-            // Fetch user's name and userImage from the Students collection.
-            DocumentSnapshot studentSnapshot = await FirebaseFirestore.instance
-                .collection('Students')
-                .doc(widget.studentId)
-                .get();
-
-            String userName = studentSnapshot.get('name') ?? '';
-            String userImage = studentSnapshot.get('userImage') ?? '';
-
-            // ignore: use_build_context_synchronously
-            showDialog(
-              context: context,
-              builder: (BuildContext context) {
-                return AlertDialog(
-                  title: const Text('Class Ended'),
-                  content: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Text('Please rate the tutor and the course.'),
-                      RatingBar.builder(
-                        initialRating: rating,
-                        minRating: 1,
-                        maxRating: 5,
-                        direction: Axis.horizontal,
-                        itemCount: 5,
-                        itemSize: 30,
-                        itemBuilder: (context, _) => const Icon(
-                          Icons.star,
-                          color: kYellowColor,
-                        ),
-                        onRatingUpdate: (newRating) {
-                          rating = newRating;
-                        },
-                      ),
-                      TextField(
-                        onChanged: (value) {
-                          review = value;
-                        },
-                        decoration: const InputDecoration(
-                          hintText: 'Write your review...',
-                        ),
-                      ),
-                    ],
-                  ),
-                  actions: <Widget>[
-                    TextButton(
-                      onPressed: () async {
-                        if (userName.isNotEmpty) {
-                          // Add the review to the TutorReviews collection.
-                          await FirebaseFirestore.instance
-                              .collection('TutorReviews')
-                              .add({
-                            'message': review,
-                            'timePosted': FieldValue.serverTimestamp(),
-                            'postedBy': userName,
-                            'userImage': userImage,
-                            'rating': rating,
-                            'tutorId': tutorId
-                          });
-
-                          // Delete the document.
-                          await FirebaseFirestore.instance
-                              .collection('Classroom')
-                              .doc(classroomId)
-                              .delete();
-                          // Remove student from tutor's list of students
-                          await FirebaseFirestore.instance
-                              .collection('Tutors')
-                              .doc(tutorId)
-                              .update({
-                            'students':
-                                FieldValue.arrayRemove([widget.studentId])
-                          });
-                          // Update student data i.e courses
-                          await FirebaseFirestore.instance
-                              .collection('Students')
-                              .doc(widget.studentId)
-                              .update({
-                            'Active': FieldValue.arrayRemove([widget.courseId]),
-                            'Completed':
-                                FieldValue.arrayUnion([widget.courseId])
-                          });
-
-                          // Navigate to home screen.
-                          Navigator.popUntil(context, ModalRoute.withName('/'));
-                        }
-                      },
-                      child: const Text('Submit'),
-                    ),
-                  ],
-                );
-              },
-            );
-          }
-        }
-      } else {
-        print('No classroom found for the current user and courseId.');
-      }
-    } catch (e) {
-      print('Error fetching classroom data: $e');
+  Widget _body() {
+    switch (_tab) {
+      case _ClassroomTab.resources:
+        return ResourcePage(
+          studentId: widget.studentId,
+          courseId: widget.courseId,
+        );
+      case _ClassroomTab.assignments:
+        return AssignmentsPage(courseId: widget.courseId);
+      case _ClassroomTab.settings:
+        return const SettingsPage();
     }
+  }
+
+  String _label(_ClassroomTab tab) {
+    switch (tab) {
+      case _ClassroomTab.resources:
+        return 'Resources';
+      case _ClassroomTab.assignments:
+        return 'Assignments';
+      case _ClassroomTab.settings:
+        return 'Settings';
+    }
+  }
+
+  /// When the class window has closed, collect a rating/review before tearing
+  /// the classroom down.
+  void _promptForReviewIfClassEnded() {
+    final data = ref.read(studentDataProvider.notifier);
+    final classroom = data.classroomFor(widget.courseId, widget.studentId);
+    if (classroom == null) return;
+    if (classroom.endTime.isAfter(DateTime.now())) return;
+
+    final student = ref.read(authProvider);
+    if (student == null) return;
+
+    final controller = TextEditingController();
+    double rating = 5;
+
+    showTLSheet<void>(
+      context: context,
+      builder: (context) {
+        final t = context.tl;
+        return StatefulBuilder(
+          builder: (context, setSheetState) => Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text('Class ended', style: TLText.cardTitle(t.text)),
+              const SizedBox(height: 6),
+              Text(
+                'Please rate the tutor and the course.',
+                style: TLText.sub(t.textSub),
+              ),
+              const SizedBox(height: 14),
+              Center(
+                child: RatingBar.builder(
+                  initialRating: rating,
+                  minRating: 1,
+                  itemCount: 5,
+                  itemSize: 34,
+                  glow: false,
+                  itemBuilder: (context, _) => const Icon(
+                    Icons.star_rounded,
+                    color: TLTokens.warning,
+                  ),
+                  onRatingUpdate: (v) => setSheetState(() => rating = v),
+                ),
+              ),
+              const SizedBox(height: 16),
+              TLField(
+                hint: 'Write your review...',
+                controller: controller,
+                maxLines: 3,
+              ),
+              const SizedBox(height: 16),
+              TLButton(
+                label: 'Submit',
+                onPressed: () {
+                  data.addTutorReview(
+                    classroom.tutorId,
+                    student.name,
+                    controller.text.trim().isEmpty
+                        ? 'Great experience overall.'
+                        : controller.text.trim(),
+                    DateFormat('d MMM y').format(DateTime.now()),
+                    student.userImage,
+                  );
+                  data.closeClassroom(
+                      classroom.id, classroom.tutorId, widget.studentId);
+                  ref
+                      .read(authProvider.notifier)
+                      .completeCourse(widget.courseId);
+                  Navigator.pop(context);
+                  Navigator.pop(context);
+                },
+              ),
+            ],
+          ),
+        );
+      },
+    ).then((_) => controller.dispose());
   }
 }

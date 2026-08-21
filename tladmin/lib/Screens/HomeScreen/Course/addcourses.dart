@@ -1,36 +1,36 @@
+import 'dart:convert';
 import 'dart:typed_data';
-import 'package:flutter/material.dart';
-import 'package:file_picker/file_picker.dart';
-import 'package:firebase_storage/firebase_storage.dart' as fstorage;
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:flutter_svg/flutter_svg.dart';
-import 'package:tladmin/Components/durationtxtfield.dart';
-import 'package:tladmin/Components/inputtextform.dart';
-import 'package:tladmin/utils/responsive.dart';
-import '../../../Components/dropdownmenu.dart';
-import '../../../constants.dart';
 
-class AddCourse extends StatefulWidget {
+import 'package:file_picker/file_picker.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_svg/flutter_svg.dart';
+
+import '../../../providers/admin_data.dart';
+import '../../../theme/app_tokens.dart';
+import '../../../theme/app_widgets.dart';
+import '../Shell/admin_form.dart';
+import '../Shell/admin_nav.dart';
+
+/// Route wrapper kept for the named-route table.
+class AddCourse extends StatelessWidget {
   static String routeName = 'AddCourse';
 
+  const AddCourse({Key? key}) : super(key: key);
+
   @override
-  State<AddCourse> createState() => _AddCourseState();
+  Widget build(BuildContext context) => const AddCourseBody();
 }
 
-class _AddCourseState extends State<AddCourse> {
-  final TextEditingController _courseNameController = TextEditingController();
-  final TextEditingController _courseInfoController = TextEditingController();
+class AddCourseBody extends ConsumerStatefulWidget {
+  const AddCourseBody({Key? key}) : super(key: key);
 
-  String _courseOverviewVideoUrl = '';
+  @override
+  ConsumerState<AddCourseBody> createState() => _AddCourseBodyState();
+}
 
-  String selectedImage = '';
-  Uint8List? selectedIconBytes;
-
-  String videoName = '';
-  Uint8List? selectedVideoBytes;
-
-  String? _selectedDepartment;
-  List<String> departments = [
+class _AddCourseBodyState extends ConsumerState<AddCourseBody> {
+  static const List<String> _departments = [
     '3D Design',
     'Programming Languages',
     'Biology',
@@ -47,582 +47,221 @@ class _AddCourseState extends State<AddCourse> {
     'Social sciences',
   ];
 
-  double _durationInHours = 0.0;
-  void updateDuration(double duration) {
-    setState(() {
-      _durationInHours = duration;
-    });
-  }
+  final _nameController = TextEditingController();
+  final _infoController = TextEditingController();
 
-  bool _isUploadingVideo = false;
-  bool _isUploadingCourseDetails = false;
+  String? _department;
+  double _durationInHours = 1;
+
+  String _imageName = '';
+  Uint8List? _imageBytes;
+
+  String _videoName = '';
+  bool _pickingVideo = false;
+  bool _submitting = false;
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _infoController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
-    return Responsive(
-      mobile: buildMobileLayout(),
-      tablet: buildTabletLayout(),
-      desktop: buildDesktopLayout(),
-    );
-  }
+    final t = context.tl;
 
-  Widget buildDesktopLayout() {
     return Column(
-      mainAxisAlignment: MainAxisAlignment.center,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Container(
-          padding: EdgeInsets.only(top: 30),
-          decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(10), color: kGreyColor700),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
-            children: [
-              SizedBox(
-                height: MediaQuery.of(context).size.height / 2,
-                width: MediaQuery.of(context).size.width / 3,
-                child: Column(
-                  children: [
-                    InputField(
-                      length: 100,
-                      hintText: 'Enter Course Name',
-                      icon: Icons.school,
-                      textEditingController: _courseNameController,
-                    ),
-                    const SizedBox(height: 10),
-                    CustomDropdownButton(
-                      value: _selectedDepartment,
-                      items: departments,
-                      onChanged: (newValue) {
-                        setState(() {
-                          _selectedDepartment = newValue;
-                        });
-                      },
-                    ),
-                    const SizedBox(
-                      height: 20,
-                    ),
-                    InputField(
-                      length: 350,
-                      minlines: 6,
-                      lines: 6,
-                      hintText: 'Enter Course Info',
-                      icon: Icons.description_outlined,
-                      textEditingController: _courseInfoController,
-                    ),
-                    const SizedBox(height: 20),
-                  ],
-                ),
+        const TLPageHeader(
+          title: 'Add Course',
+          subtitle: 'Publish a new course to the catalog',
+        ),
+        TLFormCard(
+          columns: [
+            // Left column — the course's written record.
+            [
+              const TLFormLabel('Course name'),
+              TLField(
+                hint: 'e.g. Programming Languages',
+                controller: _nameController,
               ),
-              SizedBox(
-                height: MediaQuery.of(context).size.height / 2.4,
-                width: MediaQuery.of(context).size.width / 5,
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.start,
-                  children: [
-                    DurationInputWidget(
-                      onDurationUpdated:
-                          updateDuration, // pass the callback function
-                    ),
-                    ElevatedButton(
-                      onPressed: _isUploadingCourseDetails
-                          ? null
-                          : () async {
-                              await _uploadCourseDetails();
-                            },
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: kBlueColor,
-                        foregroundColor: kWhiteColor,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(15),
-                        ),
-                      ),
-                      child: _isUploadingCourseDetails
-                          ? CircularProgressIndicator()
-                          : const SizedBox(
-                              width: double.infinity,
-                              height: 50,
-                              child: Center(child: Text('Add Course')),
-                            ),
-                    ),
-                    const SizedBox(height: 30),
-                    ElevatedButton(
-                      onPressed: _isUploadingCourseDetails
-                          ? null
-                          : () {
-                              // Clear the text fields
-                              _courseInfoController.clear();
-                              _courseNameController.clear();
-                              selectedImage;
-                              _selectedDepartment = null;
-                            },
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: kBlueColor,
-                        foregroundColor: kWhiteColor,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(15),
-                        ),
-                      ),
-                      child: _isUploadingCourseDetails
-                          ? CircularProgressIndicator()
-                          : const SizedBox(
-                              width: double.infinity,
-                              height: 50,
-                              child: Center(child: Text('Clear form')),
-                            ),
-                    ),
-                  ],
-                ),
+              const TLFormLabel('Department'),
+              TLFormDropdown(
+                value: _department,
+                hint: 'Select a department',
+                items: _departments,
+                onChanged: (v) => setState(() => _department = v),
               ),
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: 10),
-                child: Column(
-                  children: [
-                    Container(
-                      height: MediaQuery.of(context).size.height / 3.5,
-                      width: MediaQuery.of(context).size.width / 8,
-                      decoration: BoxDecoration(
-                        color: kGreyColor900,
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: selectedImage != ''
-                          ? _getImageWidget()
-                          //Image.memory(selectedIconBytes!)
-                          : Icon(Icons.image_outlined),
-                    ),
-                    const SizedBox(height: 10),
-                    ElevatedButton(
-                      onPressed: _isUploadingCourseDetails
-                          ? null
-                          : () async {
-                              await _pickIcon();
-                            },
-                      child: Center(
-                        child: Text('Add Photo'),
-                      ),
-                    ),
-                    const SizedBox(
-                      height: 10,
-                    ),
-                    ElevatedButton(
-                      onPressed: _isUploadingCourseDetails
-                          ? null
-                          : () async {
-                              await _pickCourseOverviewVideo();
-                            },
-                      child: _isUploadingVideo
-                          ? CircularProgressIndicator()
-                          : const Center(
-                              child: Text('Add Course Overview Video'),
-                            ),
-                    ),
-                  ],
-                ),
+              TLFormLabel('Duration: ${_durationInHours.toStringAsFixed(0)} hrs'),
+              Slider(
+                value: _durationInHours,
+                min: 1,
+                max: 40,
+                divisions: 39,
+                activeColor: TLTokens.primary,
+                inactiveColor: t.border,
+                label: '${_durationInHours.toStringAsFixed(0)} hrs',
+                onChanged: (v) => setState(() => _durationInHours = v),
+              ),
+              const TLFormLabel('Course info'),
+              TLField(
+                hint: 'Describe what this course covers',
+                controller: _infoController,
+                maxLines: 5,
               ),
             ],
-          ),
+            // Right column — media and the form's actions.
+            [
+              const TLFormLabel('Course icon'),
+              TLUploadZone(
+                onTap: _submitting ? null : _pickIcon,
+                child: _imageBytes == null
+                    ? null
+                    : ClipRRect(
+                        borderRadius: BorderRadius.circular(14),
+                        child: _imagePreview(),
+                      ),
+                emptyIcon: Icons.image_outlined,
+                emptyLabel: 'Click to upload image',
+              ),
+              const TLFormLabel('Course overview video'),
+              TLUploadRow(
+                icon: Icons.videocam_outlined,
+                label: _pickingVideo
+                    ? 'Reading video…'
+                    : _videoName.isEmpty
+                        ? 'Click to upload an .mp4'
+                        : _videoName,
+                onTap: _submitting || _pickingVideo ? null : _pickVideo,
+              ),
+              const SizedBox(height: 20),
+              Row(
+                children: [
+                  Expanded(
+                    child: TLPrimaryButton(
+                      label: 'Add Course',
+                      busy: _submitting,
+                      onPressed: _submitting ? null : _submit,
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  TLSecondaryButton(
+                    label: 'Clear form',
+                    onPressed: _submitting ? null : _clear,
+                  ),
+                ],
+              ),
+            ],
+          ],
         ),
       ],
     );
   }
 
-  Widget buildTabletLayout() {
-    return Padding(
-      padding: EdgeInsets.symmetric(
-          horizontal: MediaQuery.of(context).size.width / 15),
-      child: Container(
-        color: kGreyColor500,
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            // wrapped tablet specific layout inside a Column
-            Container(
-              height: MediaQuery.of(context).size.height / 4,
-              width: MediaQuery.of(context).size.width / 4,
-              decoration: BoxDecoration(
-                color: kGreyColor900,
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: selectedImage != ''
-                  ? _getImageWidget()
-                  //Image.memory(selectedIconBytes!)
-                  : Icon(Icons.image_outlined),
-            ),
-            const SizedBox(height: 10),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 200),
-              child: ElevatedButton(
-                  onPressed: () async {
-                    await _pickIcon();
-                  },
-                  child: const Center(
-                    child: Text('Add Photo'),
-                  )),
-            ),
-            const SizedBox(height: 10),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 200),
-              child: ElevatedButton(
-                onPressed: _isUploadingCourseDetails
-                    ? null
-                    : () async {
-                        await _pickCourseOverviewVideo();
-                      },
-                child: _isUploadingVideo
-                    ? CircularProgressIndicator()
-                    : const Center(
-                        child: Text('Add Course Overview Video'),
-                      ),
-              ),
-            ),
-            const SizedBox(
-              height: 10,
-            ),
-            InputField(
-              hintText: 'Enter Course Name',
-              icon: Icons.school,
-              textEditingController: _courseNameController,
-            ),
-            const SizedBox(height: 10),
-            CustomDropdownButton(
-              value: _selectedDepartment,
-              items: departments,
-              onChanged: (newValue) {
-                setState(() {
-                  _selectedDepartment = newValue;
-                });
-              },
-            ),
-            const SizedBox(
-              height: 20,
-            ),
-            InputField(
-              length: 150,
-              lines: 3,
-              hintText: 'Enter Course Info',
-              icon: Icons.description_outlined,
-              textEditingController: _courseInfoController,
-            ),
-            const SizedBox(
-              height: 10,
-            ),
-            DurationInputWidget(
-              onDurationUpdated: updateDuration, // pass the callback function
-            ),
-            ElevatedButton(
-              onPressed: () async {
-                await _uploadCourseDetails();
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: kBlueColor,
-                foregroundColor: kWhiteColor,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(15),
-                ),
-              ),
-              child: SizedBox(
-                height: 50,
-                child: Center(child: Text('Add Course')),
-              ),
-            ),
-            const SizedBox(height: 10),
-            ElevatedButton(
-              onPressed: () {
-                // Clear the text fields
-                _courseInfoController.clear();
-                _courseNameController.clear();
-                selectedImage;
-                _selectedDepartment = null;
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: kBlueColor,
-                foregroundColor: kWhiteColor,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(15),
-                ),
-              ),
-              child: SizedBox(
-                height: 50,
-                child: Center(child: Text('Clear form')),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget buildMobileLayout() {
-    return Padding(
-      padding: EdgeInsets.symmetric(
-          horizontal: MediaQuery.of(context).size.width / 15),
-      child: Container(
-        color: kGreyColor500,
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            // Wrap tablet specific layout inside a Column
-            Container(
-              height: MediaQuery.of(context).size.height / 4,
-              width: MediaQuery.of(context).size.width / 4,
-              decoration: BoxDecoration(
-                color: kGreyColor900,
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: selectedImage != ''
-                  ? _getImageWidget()
-                  //Image.memory(selectedIconBytes!)
-                  : Icon(Icons.image_outlined),
-            ),
-            const SizedBox(height: 10),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 100),
-              child: ElevatedButton(
-                  onPressed: () async {
-                    await _pickIcon();
-                  },
-                  child: const Center(
-                    child: Text('Add Photo'),
-                  )),
-            ),
-            const SizedBox(height: 10),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 100),
-              child: ElevatedButton(
-                onPressed: _isUploadingCourseDetails
-                    ? null
-                    : () async {
-                        await _pickCourseOverviewVideo();
-                      },
-                child: _isUploadingVideo
-                    ? CircularProgressIndicator()
-                    : const Center(
-                        child: Text('Add Course Overview Video'),
-                      ),
-              ),
-            ),
-            const SizedBox(
-              height: 10,
-            ),
-            InputField(
-              hintText: 'Enter Course Name',
-              icon: Icons.school,
-              textEditingController: _courseNameController,
-            ),
-            const SizedBox(height: 10),
-            CustomDropdownButton(
-              value: _selectedDepartment,
-              items: departments,
-              onChanged: (newValue) {
-                setState(() {
-                  _selectedDepartment = newValue;
-                });
-              },
-            ),
-            const SizedBox(
-              height: 20,
-            ),
-            InputField(
-              length: 150,
-              lines: 3,
-              hintText: 'Enter Course Info',
-              icon: Icons.description_outlined,
-              textEditingController: _courseInfoController,
-            ),
-            const SizedBox(
-              height: 10,
-            ),
-            DurationInputWidget(
-              onDurationUpdated: updateDuration, // pass callback function
-            ),
-            ElevatedButton(
-              onPressed: () async {
-                await _uploadCourseDetails();
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: kBlueColor,
-                foregroundColor: kWhiteColor,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(15),
-                ),
-              ),
-              child: const SizedBox(
-                height: 50,
-                child: Center(child: Text('Add Course')),
-              ),
-            ),
-            const SizedBox(height: 10),
-            ElevatedButton(
-              onPressed: () {
-                // Clear the text fields
-                _courseInfoController.clear();
-                _courseNameController.clear();
-                selectedImage;
-                _selectedDepartment = null;
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: kBlueColor,
-                foregroundColor: kWhiteColor,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(15),
-                ),
-              ),
-              child: SizedBox(
-                height: 50,
-                child: Center(child: Text('Clear form')),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-//this is to get the image
-  Widget _getImageWidget() {
-    if (selectedImage.toLowerCase().endsWith('.svg')) {
-      return SvgPicture.memory(
-        selectedIconBytes!,
-        fit: BoxFit.fill,
-      );
-    } else {
-      return Image.memory(
-        selectedIconBytes!,
-        fit: BoxFit.fill,
-      );
+  Widget _imagePreview() {
+    if (_imageName.toLowerCase().endsWith('.svg')) {
+      return SvgPicture.memory(_imageBytes!, fit: BoxFit.cover);
     }
+    return Image.memory(_imageBytes!, fit: BoxFit.cover);
   }
 
-//this is to pick a course icon which is an image
   Future<void> _pickIcon() async {
-    FilePickerResult? result = await FilePicker.platform.pickFiles(
-        type: FileType.custom,
-        allowedExtensions: ['png', 'jpg', 'jpeg', 'svg'],
-        dialogTitle: 'Select Course Icon');
-
-    if (result != null && result.files.isNotEmpty) {
-      setState(() {
-        selectedImage = result.files.first.name;
-        selectedIconBytes = result.files.single.bytes;
-      });
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('No image selected')),
-      );
-    }
-  }
-
-//upload the course details to the firebase
-  Future<void> _uploadCourseDetails() async {
-    try {
-      if (selectedImage == '') {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Please select an image')),
-        );
-        return;
-      }
-
-      // Upload the image to Firebase Storage
-      fstorage.UploadTask uploadTask;
-      fstorage.Reference ref = fstorage.FirebaseStorage.instance
-          .ref()
-          .child('course_Icons')
-          .child('/' + selectedImage);
-      final metadata = fstorage.SettableMetadata(contentType: 'images/svg+xml');
-      uploadTask = ref.putData(selectedIconBytes!, metadata);
-
-      await uploadTask.whenComplete(() => null);
-      String imageUrl = await ref.getDownloadURL();
-
-      // Add the tutor details to Firestore
-      FirebaseFirestore firestore = FirebaseFirestore.instance;
-      String courseId = firestore.collection('Courses').doc().id;
-      firestore.collection('Courses').doc(courseId).set({
-        'courseId': courseId,
-        'duration': _durationInHours,
-        'ratings': 0,
-        'reviews': [],
-        'tutors': [],
-        'createdAt': Timestamp.now(),
-        'courseName': _courseNameController.text,
-        'department': _selectedDepartment,
-        'courseInfo': _courseInfoController.text,
-        'courseIcon': imageUrl,
-        'courseVid': _courseOverviewVideoUrl
-      });
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Course details uploaded successfully')),
-      );
-
-      // Clear the form and selected image
-      setState(() {
-        _courseNameController.clear();
-        _selectedDepartment = null;
-        _courseInfoController.clear();
-        selectedImage = '';
-        selectedIconBytes = null;
-      });
-    } catch (e) {
-      print('Error uploading course details: $e');
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('An error occurred. Please try again later.')),
-      );
-    }
-  }
-
-  Future<void> _pickCourseOverviewVideo() async {
-    FilePickerResult? result = await FilePicker.platform.pickFiles(
+    final result = await FilePicker.platform.pickFiles(
       type: FileType.custom,
-      allowedExtensions: ['mp4'],
+      allowedExtensions: const ['png', 'jpg', 'jpeg', 'svg'],
+      dialogTitle: 'Select Course Icon',
+    );
+    if (!mounted) return;
+
+    if (result == null || result.files.isEmpty) {
+      _toast('No image selected');
+      return;
+    }
+    setState(() {
+      _imageName = result.files.first.name;
+      _imageBytes = result.files.single.bytes;
+    });
+  }
+
+  Future<void> _pickVideo() async {
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: const ['mp4'],
       dialogTitle: 'Select Course video',
     );
+    if (!mounted) return;
 
-    if (result != null && result.files.isNotEmpty) {
-      setState(() {
-        _isUploadingVideo = true;
-        videoName = result.files.single.name;
-        selectedVideoBytes = result.files.single.bytes;
-      });
+    if (result == null || result.files.isEmpty) {
+      _toast('No video selected');
+      return;
+    }
+    setState(() {
+      _pickingVideo = true;
+      _videoName = result.files.single.name;
+    });
+    // Nothing uploads the bytes anywhere yet, so the file name stands in for
+    // the eventual URL — same placeholder the previous screen used.
+    setState(() => _pickingVideo = false);
+    _toast('Course overview video attached');
+  }
 
-      try {
-        String videoUrl = await _uploadCourseOverviewVideo(videoName);
+  Future<void> _submit() async {
+    if (_nameController.text.trim().isEmpty) {
+      _toast('Please enter a course name');
+      return;
+    }
+    if (_department == null) {
+      _toast('Please pick a department');
+      return;
+    }
+    if (_imageBytes == null) {
+      _toast('Please select an image');
+      return;
+    }
 
-        // Store the video url in a class variable to use when adding the course
-        _courseOverviewVideoUrl = videoUrl;
+    setState(() => _submitting = true);
+    try {
+      // No Storage upload to point a URL at — keep the picked bytes as a data
+      // URI so the course list can still render the image.
+      final mimeType = _imageName.toLowerCase().endsWith('.svg')
+          ? 'image/svg+xml'
+          : 'image/png';
+      final imageUrl = 'data:$mimeType;base64,${base64Encode(_imageBytes!)}';
 
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-              content: Text('Course overview video uploaded successfully')),
-        );
-      } catch (e) {
-        print('Error uploading course overview video: $e');
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('An error occurred while uploading video')),
-        );
-      } finally {
-        setState(() {
-          _isUploadingVideo = false;
-        });
-      }
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('No video selected')),
-      );
+      ref.read(adminDataProvider.notifier).addCourse(
+            name: _nameController.text.trim(),
+            department: _department!,
+            info: _infoController.text.trim(),
+            imageUrl: imageUrl,
+            duration: _durationInHours,
+            videoUrl: _videoName.isEmpty ? null : _videoName,
+          );
+
+      _clear();
+      _toast('Course added');
+      ref.read(adminNavProvider.notifier).go(AdminPageKey.courses);
+    } finally {
+      if (mounted) setState(() => _submitting = false);
     }
   }
 
-  Future<String> _uploadCourseOverviewVideo(String videoName) async {
-    fstorage.UploadTask uploadTask;
-    fstorage.Reference ref = fstorage.FirebaseStorage.instance
-        .ref()
-        .child('course_videos')
-        .child('/' + videoName);
+  void _clear() {
+    setState(() {
+      _nameController.clear();
+      _infoController.clear();
+      _department = null;
+      _durationInHours = 1;
+      _imageName = '';
+      _imageBytes = null;
+      _videoName = '';
+    });
+  }
 
-    final metadata = fstorage.SettableMetadata(contentType: 'video/mp4');
-    uploadTask = ref.putData(selectedVideoBytes!, metadata);
-
-    await uploadTask.whenComplete(() => null);
-    String videoUrl = await ref.getDownloadURL();
-    return videoUrl;
+  void _toast(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text(message)));
   }
 }

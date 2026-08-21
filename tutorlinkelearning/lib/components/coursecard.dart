@@ -1,127 +1,178 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:google_fonts/google_fonts.dart';
-import 'package:tutorlinkelearning/Screens/CourseDetails/coursesdetail.dart';
-import 'package:tutorlinkelearning/constants.dart';
-import 'package:tutorlinkelearning/utils/coursename.dart';
 import 'package:flutter/material.dart';
 
+import '../Screens/CourseDetails/coursesdetail.dart';
+import '../theme/app_text.dart';
+import '../theme/app_tokens.dart';
+import '../theme/app_widgets.dart';
+import '../utils/coursename.dart';
 import '../utils/dateformat.dart';
+import '../utils/image_helpers.dart';
 
-class CourseCardListView extends StatelessWidget {
-  final String selectedDepartment;
-  final String searchText;
+/// Compact list row used on Home — 56px thumbnail, title, rating and duration.
+class CourseRow extends StatelessWidget {
+  const CourseRow({Key? key, required this.course, this.onTap})
+      : super(key: key);
 
-  CourseCardListView({
-    required this.selectedDepartment,
-    required this.searchText,
-  });
+  final CoursesType course;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
-    return StreamBuilder<QuerySnapshot>(
-      stream: FirebaseFirestore.instance.collection('Courses').snapshots(),
-      builder: (context, snapshot) {
-        if (snapshot.hasData) {
-          final List<DocumentSnapshot> courseDocuments = snapshot.data!.docs;
-          final List<CoursesType> courses = courseDocuments
-              .map((doc) =>
-                  CoursesType.fromMap(doc.data() as Map<String, dynamic>))
-              .where((course) {
-            if (selectedDepartment == 'All' ||
-                course.department == selectedDepartment) {
-              if (searchText.isEmpty) {
-                return true; // Show all courses when selectedDepartment is "All" and no search text is entered
-              } else {
-                return course.name
-                    .toLowerCase()
-                    .contains(searchText.toLowerCase());
-              }
-            }
-            return false;
-          }).toList();
-
-          return ListView.builder(
-            itemCount: courses.length,
-            itemBuilder: (context, index) {
-              final course = courses[index];
-
-              return CourseCard(
-                course: course,
-              );
-            },
-          );
-        } else if (snapshot.hasError) {
-          return Text('Error: ${snapshot.error}');
-        } else {
-          return const Center(child: CircularProgressIndicator());
-        }
-      },
+    final t = context.tl;
+    return TLCard(
+      onTap: onTap ?? () => openCourseDetail(context, course.courseId),
+      child: Row(
+        children: [
+          Container(
+            width: 56,
+            height: 56,
+            decoration: BoxDecoration(
+              color: t.cardAlt,
+              borderRadius: BorderRadius.circular(14),
+              image: DecorationImage(
+                image: appImageProvider(course.image),
+                fit: BoxFit.cover,
+              ),
+            ),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  course.name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TLText.cardTitle(t.text),
+                ),
+                const SizedBox(height: 4),
+                Row(
+                  children: [
+                    TLRating(value: course.rating.toDouble()),
+                    const SizedBox(width: 10),
+                    Text(
+                      formatDuration(course.duration),
+                      style: TLText.meta(t.textSub),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
 
-class CourseCard extends StatelessWidget {
-  final CoursesType course;
+/// Full-bleed card used on Explore — cover image with a NEW flag and a
+/// bookmark toggle, then title, department and metadata.
+class CourseCoverCard extends StatelessWidget {
+  const CourseCoverCard({
+    Key? key,
+    required this.course,
+    required this.bookmarked,
+    required this.onToggleBookmark,
+    this.onTap,
+  }) : super(key: key);
 
-  const CourseCard({required this.course});
+  final CoursesType course;
+  final bool bookmarked;
+  final VoidCallback onToggleBookmark;
+  final VoidCallback? onTap;
+
+  /// The design flags anything published in the last week.
+  bool get isNew =>
+      DateTime.now().difference(course.createdAt).inDays <= 7;
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: () {
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (context) => CourseDetailScreen(courseId: course.courseId),
+    final t = context.tl;
+    return Material(
+      color: t.card,
+      borderRadius: BorderRadius.circular(TLTokens.rXl),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: onTap ?? () => openCourseDetail(context, course.courseId),
+        child: Container(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(TLTokens.rXl),
+            border: Border.all(color: t.border),
           ),
-        );
-      },
-      child: SizedBox(
-        height: 100,
-        width: MediaQuery.of(context).size.width - 32,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 5),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.start,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Container(
-                height: 50,
-                width: 50,
-                decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(8),
-                    color: kGreyColor500,
-                    image: DecorationImage(image: NetworkImage(course.image))),
+              Stack(
+                children: [
+                  SizedBox(
+                    height: 130,
+                    width: double.infinity,
+                    child: Image(
+                      image: appImageProvider(course.image),
+                      fit: BoxFit.cover,
+                    ),
+                  ),
+                  if (isNew)
+                    Positioned(
+                      top: 10,
+                      left: 10,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 3),
+                        decoration: BoxDecoration(
+                          color: TLTokens.primary,
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Text(
+                          'NEW',
+                          style: TLText.tag(Colors.white)
+                              .copyWith(fontSize: 10, letterSpacing: 0.4),
+                        ),
+                      ),
+                    ),
+                  Positioned(
+                    top: 8,
+                    right: 8,
+                    child: Material(
+                      color: Colors.black.withValues(alpha: 0.35),
+                      borderRadius: BorderRadius.circular(TLTokens.rSm),
+                      child: InkWell(
+                        onTap: onToggleBookmark,
+                        borderRadius: BorderRadius.circular(TLTokens.rSm),
+                        child: SizedBox(
+                          width: 32,
+                          height: 32,
+                          child: Icon(
+                            bookmarked
+                                ? Icons.bookmark_rounded
+                                : Icons.bookmark_border_rounded,
+                            size: 17,
+                            color: bookmarked ? TLTokens.primary : Colors.white,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
               ),
-              const SizedBox(
-                width: 20,
-              ),
-              Flexible(
+              Padding(
+                padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
                 child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(course.name,
-                        style: GoogleFonts.sourceSansPro(
-                            fontWeight: FontWeight.w500, fontSize: 18)),
-                    const SizedBox(
-                      height: 10,
-                    ),
+                    Text(course.name, style: TLText.cardTitle(t.text)),
+                    const SizedBox(height: 4),
+                    Text(course.department, style: TLText.meta(t.textSub)),
+                    const SizedBox(height: 8),
                     Row(
-                      mainAxisAlignment: MainAxisAlignment.start,
                       children: [
-                        const Icon(
-                          Icons.star,
-                          color: kYellowColor,
+                        TLRating(value: course.rating.toDouble()),
+                        const SizedBox(width: 12),
+                        Text(
+                          formatDuration(course.duration),
+                          style: TLText.meta(t.textSub),
                         ),
-                        const SizedBox(
-                          width: 3,
-                        ),
-                        Text(course.rating.toStringAsFixed(1)),
-                        const SizedBox(
-                          width: 30,
-                        ),
-                        const Icon(Icons.av_timer_sharp),
-                        Text(formatDuration(course.duration))
                       ],
                     ),
                   ],
@@ -135,248 +186,94 @@ class CourseCard extends StatelessWidget {
   }
 }
 
-//All courses card
-class CoursesCard extends StatefulWidget {
-  @override
-  State<CoursesCard> createState() => _CoursesCardState();
-  final String course;
-  final String courseId;
-  final String courseIcon;
-  final String department;
-  final int rating;
-  final double duration;
-  final String description;
-
-  const CoursesCard({
-    required this.courseId,
-    required this.duration,
-    required this.courseIcon,
+/// Enrolled-course card on My Courses — side thumbnail, status pill and, for
+/// active courses, a progress track.
+class EnrolledCourseCard extends StatelessWidget {
+  const EnrolledCourseCard({
+    Key? key,
     required this.course,
-    required this.rating,
-    required this.department,
-    required this.description,
-  });
-}
+    required this.statusLabel,
+    required this.statusColor,
+    required this.statusBackground,
+    this.progress,
+    this.rateLabel,
+    this.onRate,
+    this.onTap,
+  }) : super(key: key);
 
-class _CoursesCardState extends State<CoursesCard> {
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: () {
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (context) => CourseDetailScreen(courseId: widget.courseId),
-          ),
-        );
-      },
-      child: Card(
-        elevation: 8,
-        surfaceTintColor: Colors.lightGreen,
-        child: Padding(
-          padding:
-              const EdgeInsets.only(bottom: 10, left: 10, right: 10, top: 15),
-          child: Container(
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(8),
-            ),
-            height: 85,
-            width: MediaQuery.of(context).size.width - 32,
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Hero(
-                  tag:
-                      '${widget.courseId}_icon', // Use a unique tag for the icon
-                  child: Material(
-                    type: MaterialType.transparency,
-                    child: Container(
-                      width: 75,
-                      decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(8),
-                          color: kGreyColor500,
-                          image: DecorationImage(
-                              image: NetworkImage(widget.courseIcon),
-                              fit: BoxFit.fill)),
-                    ),
-                  ),
-                ),
-                const SizedBox(
-                  width: 16,
-                ),
-                Flexible(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Hero(
-                        tag: '${widget.courseId}_name',
-                        child: Material(
-                          color: Colors.transparent,
-                          child: Text(
-                            widget.course,
-                            overflow: TextOverflow.ellipsis,
-                            maxLines: 1,
-                            style: Theme.of(context).textTheme.titleSmall,
-                          ),
-                        ),
-                      ),
-                      Text(
-                        '${widget.description}',
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(fontSize: 12),
-                        maxLines: 2,
-                      ),
-                      const Spacer(),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.start,
-                        children: [
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.start,
-                            children: [
-                              const Icon(
-                                Icons.star,
-                                color: kYellowColor,
-                              ),
-                              Text(
-                                '${widget.rating.toDouble()}',
-                                style: TextStyle(fontSize: 10),
-                              ),
-                              const SizedBox(
-                                width: 100,
-                              ),
-                              const Icon(Icons.av_timer_sharp),
-                              Text(
-                                formatDuration(widget.duration),
-                                style: TextStyle(fontSize: 10),
-                              )
-                            ],
-                          ),
-                        ],
-                      )
-                    ],
-                  ),
-                )
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-// User Personalised course card for Mycourses Page
-class MyCourseCard extends StatelessWidget {
   final CoursesType course;
-  final bool isActive;
+  final String statusLabel;
+  final Color statusColor;
+  final Color statusBackground;
+
+  /// 0..1 for active courses; null hides the track.
+  final double? progress;
+
+  /// Shown for completed courses that have not been reviewed yet.
+  final String? rateLabel;
+  final VoidCallback? onRate;
   final VoidCallback? onTap;
 
-  MyCourseCard({
-    required this.course,
-    required this.isActive,
-    this.onTap,
-  });
-
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: () {
-        if (isActive && onTap != null) {
-          onTap!();
-        }
-      },
-      child: Card(
-        elevation: 8,
-        child: Padding(
-          padding: const EdgeInsets.only(bottom: 2, top: 2),
-          child: Container(
-            height: 150,
-            decoration: BoxDecoration(borderRadius: BorderRadius.circular(10)),
-            width: MediaQuery.of(context).size.width - 40,
+    final t = context.tl;
+    return Material(
+      color: t.card,
+      borderRadius: BorderRadius.circular(TLTokens.rXl),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: onTap,
+        child: Container(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(TLTokens.rXl),
+            border: Border.all(color: t.border),
+          ),
+          child: IntrinsicHeight(
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Material(
-                  child: Container(
-                    width: 120,
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(10),
-                      color: kGreyColor600,
-                      image: DecorationImage(
-                          image: NetworkImage(course.image), fit: BoxFit.fill),
-                    ),
+                SizedBox(
+                  width: 96,
+                  child: Image(
+                    image: appImageProvider(course.image),
+                    fit: BoxFit.cover,
                   ),
                 ),
-                const SizedBox(
-                  width: 16,
-                ),
-                Flexible(
+                Expanded(
                   child: Padding(
-                    padding: const EdgeInsets.all(8.0),
+                    padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Material(
-                          color: Colors.transparent,
-                          child: Text(
-                            course.name,
-                            overflow: TextOverflow.ellipsis,
-                            maxLines: 1,
-                            style: const TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.bold,
-                            ),
+                        Text(course.name, style: TLText.cardTitle(t.text)),
+                        const SizedBox(height: 6),
+                        TLStatusChip(
+                          label: statusLabel,
+                          color: statusColor,
+                          background: statusBackground,
+                        ),
+                        if (progress != null) ...[
+                          const SizedBox(height: 8),
+                          TLProgressBar(value: progress!),
+                          const SizedBox(height: 4),
+                          Text(
+                            '${(progress! * 100).round()}% complete',
+                            style: TLText.tag(t.textSub)
+                                .copyWith(fontWeight: FontWeight.w400),
                           ),
-                        ),
-                        const SizedBox(
-                          height: 2,
-                        ),
-                        Text(
-                          course.details,
-                          overflow: TextOverflow.ellipsis,
-                          maxLines: 2,
-                          textAlign: TextAlign.start,
-                        ),
-                        const SizedBox(
-                          height: 3,
-                        ),
-                        Container(
-                          height: 24,
-                          width: MediaQuery.of(context).size.width / 4,
-                          decoration: BoxDecoration(
-                              borderRadius: BorderRadius.circular(15),
-                              color: Colors.black45),
-                          child: Center(
+                        ],
+                        if (rateLabel != null) ...[
+                          const SizedBox(height: 6),
+                          InkWell(
+                            onTap: onRate,
                             child: Text(
-                              course.department,
-                              overflow: TextOverflow.ellipsis,
-                              maxLines: 1,
-                              style: const TextStyle(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.bold,
-                                  color: kWhiteColor),
+                              rateLabel!,
+                              style: TLText.meta(TLTokens.primary)
+                                  .copyWith(fontWeight: FontWeight.w700),
                             ),
                           ),
-                        ),
-                        const Spacer(),
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.start,
-                          children: [
-                            const Icon(
-                              Icons.star,
-                              color: Colors.amber,
-                            ),
-                            const SizedBox(
-                              width: 3,
-                            ),
-                            Text(course.rating.toString()),
-                            const SizedBox(
-                              width: 30,
-                            ),
-                            const Icon(Icons.av_timer_sharp),
-                            Text(formatDuration(course.duration)),
-                          ],
-                        ),
+                        ],
                       ],
                     ),
                   ),
@@ -388,4 +285,13 @@ class MyCourseCard extends StatelessWidget {
       ),
     );
   }
+}
+
+void openCourseDetail(BuildContext context, String courseId) {
+  Navigator.push(
+    context,
+    MaterialPageRoute(
+      builder: (context) => CourseDetailScreen(courseId: courseId),
+    ),
+  );
 }

@@ -1,222 +1,90 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:firebase_storage/firebase_storage.dart';
-import 'package:thetutorlink/Screens/ClassRoom/models/showdialog.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../Components/resourcemangement.dart';
+import '../../providers/tutor_data.dart';
+import '../../services/local_auth_service.dart';
+import '../../theme/app_tokens.dart';
+import '../../theme/app_widgets.dart';
+import 'models/showdialog.dart';
+import 'resourceroom.dart' show askForTitle;
 
-class AssignmentsPage extends StatefulWidget {
+/// Assignments exchanged with one student.
+class AssignmentsPage extends ConsumerStatefulWidget {
+  const AssignmentsPage({Key? key, required this.studentId}) : super(key: key);
+
   final String studentId;
-  const AssignmentsPage({required this.studentId});
 
   @override
-  State<AssignmentsPage> createState() => _AssignmentsPageState();
+  ConsumerState<AssignmentsPage> createState() => _AssignmentsPageState();
 }
 
-class _AssignmentsPageState extends State<AssignmentsPage> {
-  final _auth = FirebaseAuth.instance;
-  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
-  final FirebaseStorage _storage = FirebaseStorage.instance;
-  String? assignmentId = '';
-
-  Future<String> _uploadFile(File file) async {
-    try {
-      final user = _auth.currentUser;
-      if (user == null) {
-        // Handle user authentication error
-        return '';
-      }
-
-      final filePath =
-          'course_materials/${user.uid}/${file.path.split('/').last}';
-      final storageRef = _storage.ref().child(filePath);
-      await storageRef.putFile(file);
-      return await storageRef.getDownloadURL();
-    } catch (e) {
-      // Handle file upload error
-      print('Error uploading file: $e');
-      return '';
-    }
-  }
-
-  Future<String?> _showTitleInputDialog(BuildContext context) async {
-    String? assignmentTitle = '';
-
-    return showDialog<String>(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: Text('Enter Resource Title'),
-          content: TextField(
-            onChanged: (value) {
-              assignmentTitle = value;
-            },
-            decoration: InputDecoration(hintText: 'e.g., Course Outline'),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () {
-                Navigator.pop(context);
-              },
-              child: Text('Cancel'),
-            ),
-            TextButton(
-              onPressed: () {
-                Navigator.pop(context, assignmentTitle);
-              },
-              child: Text('Save'),
-            ),
-          ],
-        );
-      },
-    );
-  }
-
-  Future<void> _sendFiles(List<File> files) async {
-    try {
-      if (files.isNotEmpty) {
-        String tutorId = _auth.currentUser!.uid;
-        String studentId = widget.studentId;
-
-        List<Map<String, dynamic>> assignmentList = [];
-        List<Map<String, dynamic>> atimestampList = [];
-
-        // Check if a document already exists for the current student and tutor
-        QuerySnapshot tutorDocuments = await _firestore
-            .collection('Classroom')
-            .where('studentId', isEqualTo: studentId)
-            .where('tutorId', isEqualTo: tutorId)
-            .get();
-
-        String tutorDocumentId;
-
-        if (tutorDocuments.docs.isEmpty) {
-          // If no document exists, create a new one
-          DocumentReference tutorDocumentRef =
-              await _firestore.collection('Classroom').add({
-            'tutorId': tutorId,
-            'studentId': studentId,
-          });
-          // Get the ID of the newly created document
-          tutorDocumentId = tutorDocumentRef.id;
-
-          // Store the document ID in the 'resources' array in the 'Tutors' collection
-          await _firestore.collection('Tutors').doc(tutorId).update({
-            'assignments': FieldValue.arrayUnion([tutorDocumentId]),
-          });
-        } else {
-          // If a document already exists, get the first document (as there should be only one)
-          DocumentSnapshot tutorDocument = tutorDocuments.docs.first;
-          // Get the ID of the existing document
-          tutorDocumentId = tutorDocument.id;
-
-          // Retrieve the existing resources and timestamps from Firestore
-          List<dynamic> existingAssignment = tutorDocument['assignments'];
-          List<dynamic> existingaTimestamps = tutorDocument['atimestamps'];
-
-          // Add the existing resources and timestamps to the lists
-          assignmentList
-              .addAll(existingAssignment.cast<Map<String, dynamic>>());
-          atimestampList
-              .addAll(existingaTimestamps.cast<Map<String, dynamic>>());
-        }
-
-        // Upload files and get their URLs and timestamps
-        for (File file in files) {
-          String assignmentUrl = await _uploadFile(file);
-          String? assignmentTitle = await _showTitleInputDialog(context);
-          if (assignmentTitle != null && assignmentTitle.isNotEmpty) {
-            // Add each resource as a map to the resourceList
-            assignmentList.add({
-              'title': assignmentTitle,
-              'url': assignmentUrl,
-            });
-
-            // Add each timestamp as a map to the timestampList
-            atimestampList.add({
-              'title': assignmentTitle,
-              'time': Timestamp.now(),
-            });
-          }
-        }
-
-        // Update the 'resources' and 'timestamps' fields in the tutor document
-        await _firestore.collection('Classroom').doc(tutorDocumentId).update({
-          'assignments': assignmentList,
-          'atimestamps': atimestampList,
-        });
-      }
-    } catch (e) {
-      // Handle error
-      print('Error sending files: $e');
-    }
-  }
-
+class _AssignmentsPageState extends ConsumerState<AssignmentsPage> {
   @override
   Widget build(BuildContext context) {
+    final tutorId = ref.watch(authProvider)?.id ?? '';
+    final classroom = ref
+        .watch(tutorDataProvider)
+        .classrooms
+        .where((c) => c.studentId == widget.studentId && c.tutorId == tutorId);
+    final assignments =
+        classroom.isEmpty ? const [] : classroom.first.assignments;
+
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Assignments'),
-        centerTitle: true,
-        leading: IconButton(
-          icon: const Icon(Icons.menu),
-          onPressed: () {
-            Scaffold.of(context).openDrawer();
-          },
-        ),
-      ),
-      body: StreamBuilder(
-        stream: _firestore
-            .collection('Classroom')
-            .where('studentId', isEqualTo: widget.studentId)
-            .snapshots(),
-        builder: (context, snapshot) {
-          if (snapshot.hasError) {
-            return Text('Error: ${snapshot.error}');
-          }
-
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const CircularProgressIndicator();
-          }
-
-          if (snapshot.data!.docs.isEmpty) {
-            return const Center(child: Text('No Assignments available.'));
-          }
-          assignmentId = snapshot.data!.docs.first.id;
-
-          return ListView.builder(
-            itemCount: snapshot.data!.docs.length,
-            itemBuilder: (context, index) {
-              final doc = snapshot.data!.docs[index];
-              final assignments = doc['assignments'] as List<dynamic>;
-              final timestamps = doc['atimestamps'] as List<dynamic>;
-
-              return Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  for (int i = 0; i < assignments.length; i++)
-                    ResourceItem(
-                      resourceTitle: assignments[i]['title'],
-                      resourceUrl: assignments[i]['url'],
-                      timestamp: timestamps[i]['time'].toDate(),
-                      tutorDocumentId: assignmentId!,
-                      tutorId: FirebaseAuth.instance.currentUser!.uid,
-                    ),
-                  const Divider(),
-                ],
-              );
-            },
-          );
-        },
-      ),
+      backgroundColor: Colors.transparent,
       floatingActionButton: FloatingActionButton(
-          child: const Icon(Icons.add),
-          onPressed: () {
-            showMaterialDialog(context, _sendFiles);
-          }),
+        backgroundColor: TLTokens.primary,
+        foregroundColor: Colors.white,
+        onPressed: () => showMaterialDialog(context, _shareFiles),
+        child: const Icon(Icons.add_rounded),
+      ),
+      body: assignments.isEmpty
+          ? const TLEmptyState(
+              icon: Icons.assignment_outlined,
+              title: 'No assignments yet',
+              message: 'Set work for this student with the button below.',
+            )
+          : ListView.separated(
+              padding: const EdgeInsets.fromLTRB(20, 0, 20, 96),
+              itemCount: assignments.length,
+              separatorBuilder: (_, __) => const SizedBox(height: 10),
+              itemBuilder: (context, i) => ResourceItem(
+                tutorId: tutorId,
+                tutorDocumentId: classroom.first.id,
+                resourceTitle: assignments[i].title,
+                resourceUrl: assignments[i].url,
+                timestamp: assignments[i].time,
+                // Assignments are the student's submissions to keep.
+                canRemove: false,
+              ),
+            ),
     );
+  }
+
+  /// Files stay as on-device paths; there is no Storage bucket to upload to.
+  Future<void> _shareFiles(List<File> files) async {
+    if (files.isEmpty) return;
+
+    final tutorId = ref.read(authProvider)?.id;
+    if (tutorId == null) return;
+
+    final classroom = ref
+        .read(tutorDataProvider.notifier)
+        .getOrCreateClassroom(widget.studentId, tutorId, '');
+
+    for (final file in files) {
+      final title = await askForTitle(
+        context,
+        heading: 'Assignment title',
+        hint: 'e.g. Assignment 1',
+      );
+      if (title != null && title.isNotEmpty) {
+        ref
+            .read(tutorDataProvider.notifier)
+            .addAssignment(classroom.id, title, file.path);
+      }
+    }
   }
 }

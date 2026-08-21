@@ -35,19 +35,9 @@ dependencies:
   # The following adds the Cupertino Icons font to your application.
   # Use with the CupertinoIcons class for iOS style icons.
   cupertino_icons: ^1.0.2
-  #this is to initiate firebase dependencies
-  firebase_core: ^2.15.0
-  #This is for user authentication
-  firebase_auth: ^4.6.3
-  #This is for the storage of user files into the cloud Api
-  firebase_storage: ^11.2.3
   shared_preferences: ^2.1.2
   #This is a custom notification for the user
-  awesome_notifications: ^0.7.4+1
-  #This is to generate ids for the courses
-  uuid: ^3.0.7
-  #this is to store data snapshots of users and to query data from the backend
-  cloud_firestore: ^4.8.1
+  awesome_notifications: ^0.12.1
   #This is the rating of users probably i'll remove later
   flutter_rating_bar: ^4.0.1
   #This is for the svg images
@@ -55,39 +45,35 @@ dependencies:
  
  
   #this is for picking files off the device
-  file_picker: ^5.3.2
-  #This is a state provider which isn't used 
-  provider: ^6.0.5
+  file_picker: ^12.0.0
   #this is to help image crop the image selected from the mobile for profile images
-  image_cropper: ^5.0.0
+  image_cropper: ^12.2.1
   #this is to pick image from the device
   image_picker: ^1.0.1
-  #this is a firebase feature to help in send notifications
-  firebase_messaging: ^14.6.5
   #this feature is to check the internet connectivity of the device
-  connectivity: ^3.0.6
-  #this is to help user send messages to other user in real time
-  firebase_database: ^10.2.4
+  connectivity_plus: ^6.1.0
   #this library is to help the get the path for storage when a file is downloaded 
   path_provider: ^2.1.0
   #this is a library for date and time conversion
-  intl: ^0.18.0
+  intl: ^0.20.0
   #this is a file opener library 
-  open_file: ^3.3.2
+  open_file: ^4.0.0
   #this is a file downloader library
-  flutter_file_downloader: ^1.1.2
+  flutter_file_downloader: ^2.1.1
   url_launcher: ^6.1.12
   http: ^1.1.0
   path: ^1.8.3
-  syncfusion_flutter_pdfviewer: ^22.2.10
-  google_fonts: ^5.1.0
+  syncfusion_flutter_pdfviewer: ^34.2.4
+  google_fonts: ^8.2.1
+  flutter_riverpod: ^2.6.1
 
   
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
-  flutter_launcher_icons: ^0.13.1
+  flutter_launcher_icons: ^0.14.4
+  flutter_lints: ^6.0.0
 
 flutter_icons:
   android: true

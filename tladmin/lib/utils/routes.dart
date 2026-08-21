@@ -1,30 +1,34 @@
 import 'package:flutter/material.dart';
-import 'package:tladmin/Screens/HomeScreen/Course/addcourses.dart';
-import 'package:tladmin/Screens/HomeScreen/Course/allcourses.dart';
-import 'package:tladmin/Screens/HomeScreen/Tutors/acceptedtutors.dart';
-import 'package:tladmin/Screens/HomeScreen/dashboard.dart';
-import 'package:tladmin/Screens/HomeScreen/home.dart';
-import 'package:tladmin/Screens/HomeScreen/Tutors/alltutors.dart';
-import 'package:tladmin/Screens/HomeScreen/Tutors/tutorreviews.dart';
-import 'package:tladmin/Screens/helpscreen.dart';
-import 'package:tladmin/Screens/policyscreen.dart';
+
 import '../Screens/ForgetPassword/resetpassword.dart';
+import '../Screens/HomeScreen/Books/addbooks.dart';
+import '../Screens/HomeScreen/Course/addcourses.dart';
+import '../Screens/HomeScreen/Course/allcourses.dart';
+import '../Screens/HomeScreen/Tutors/acceptedtutors.dart';
+import '../Screens/HomeScreen/Tutors/alltutors.dart';
+import '../Screens/HomeScreen/Tutors/tutorreviews.dart';
+import '../Screens/HomeScreen/dashboard.dart';
+import '../Screens/HomeScreen/home.dart';
 import '../Screens/SignIn/signinscreen.dart';
 import '../Screens/Splash/splashscreen.dart';
+import '../Screens/helpscreen.dart';
+import '../Screens/policyscreen.dart';
 
-//these are the routes nameed for with unique names 
-//for easy navigations between screens
+/// Named routes. Inside the console, navigation runs through `adminNavProvider`
+/// instead — these entries exist for the auth flow and for deep links into a
+/// single page.
 Map<String, WidgetBuilder> routes = {
-  SplashScreen.routeName: (context) => SplashScreen(),
-  HelpScreen.routeName: (context) => HelpScreen(),
-  PolicyScreen.routeName: (context) => PolicyScreen(),
-  AdminPage.routeName: (context) => AdminPage(),
-  AddCourse.routeName: (context) => AddCourse(),
-  DashBoard.routeName: (context) => DashBoard(),
-  AddAcceptedTutorScreen.routeName: (context) => AddAcceptedTutorScreen(),
-  TutorReviews.routeName: (context) => TutorReviews(),
-  AllCoursesScreen.routeName: (context) => AllCoursesScreen(),
-  AllTutorsScreen.routeName: (context) => AllTutorsScreen(),
-  SignInScreen.routeName: (context) => SignInScreen(),
-  ResetPasswordScreen.routeName: (context) => ResetPasswordScreen(),
+  SplashScreen.routeName: (context) => const SplashScreen(),
+  HelpScreen.routeName: (context) => const HelpScreen(),
+  PolicyScreen.routeName: (context) => const PolicyScreen(),
+  AdminPage.routeName: (context) => const AdminPage(),
+  AddCourse.routeName: (context) => const AddCourse(),
+  DashBoard.routeName: (context) => const DashBoard(),
+  AddAcceptedTutorScreen.routeName: (context) => const AddAcceptedTutorScreen(),
+  AddBooksPage.routeName: (context) => const AddBooksPage(),
+  TutorReviews.routeName: (context) => const TutorReviews(),
+  AllCoursesScreen.routeName: (context) => const AllCoursesScreen(),
+  AllTutorsScreen.routeName: (context) => const AllTutorsScreen(),
+  SignInScreen.routeName: (context) => const SignInScreen(),
+  ResetPasswordScreen.routeName: (context) => const ResetPasswordScreen(),
 };
